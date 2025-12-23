@@ -1,0 +1,8 @@
+{
+  "name": "NurseBot",
+  "description": "Assistant interne intelligent pour cabinets infirmiers : gestion planning, OCR ordonnances, pré-facturation IDEL et communication agents IA.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
