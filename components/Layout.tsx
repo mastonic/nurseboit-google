@@ -56,7 +56,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               }`
             }
           >
-            {/* Fix: use render prop to access isActive in children tags */}
             {({ isActive }) => (
               <>
                 <div className="flex items-center space-x-4">
@@ -75,7 +74,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </nav>
 
       <div className="p-6 border-t border-slate-100">
-        <div className="flex items-center justify-between px-2">
+        <div className="flex items-center justify-between px-2 mb-4">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center font-black text-sm border border-slate-200">
               {session.name[0]}
@@ -89,18 +88,21 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
              <i className="fa-solid fa-power-off text-sm"></i>
           </button>
         </div>
+        <div className="px-2 text-[8px] font-black text-slate-300 uppercase tracking-widest text-center">
+           Build: {process.env.VITE_BUILD_DATE}
+        </div>
       </div>
     </>
   );
 
   return (
     <div className="flex h-screen overflow-hidden bg-white lg:bg-slate-50">
-      {/* Desktop Sidebar (White bg for Dribbble look) */}
+      {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-slate-100 shrink-0 relative z-40">
         <SidebarContent />
       </aside>
 
-      {/* Mobile Sidebar (Drawer) */}
+      {/* Mobile Sidebar */}
       <div className={`fixed inset-0 z-50 lg:hidden transition-opacity duration-300 ${isMobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
         <aside className={`absolute top-0 left-0 h-full w-72 bg-white shadow-2xl transition-transform duration-300 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>

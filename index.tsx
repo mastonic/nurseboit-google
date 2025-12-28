@@ -1,3 +1,4 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -12,6 +13,9 @@ const root = ReactDOM.createRoot(rootElement);
 
 // Initialisation asynchrone sécurisée
 const startApp = async () => {
+  console.log(`🚀 NurseBot PRO - Démarrage du système`);
+  console.log(`📦 Build: ${process.env.VITE_BUILD_DATE || 'Développement'}`);
+
   try {
     await initStore();
     root.render(
@@ -21,7 +25,6 @@ const startApp = async () => {
     );
   } catch (err) {
     console.error("Erreur critique lors de l'initialisation de NurseBot:", err);
-    // On tente quand même de rendre l'App, car le store a un fallback localStorage
     root.render(
       <React.StrictMode>
         <App />
