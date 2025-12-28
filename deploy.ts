@@ -4,14 +4,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * NurseBot PRO - Script de Déploiement VPS (Amélioré pour Forcer la Mise à Jour)
+ * NurseBot PRO - Script de Déploiement Docker (Optimisé pour srv1146904)
  */
 
 const CONFIG = {
-  webRoot: '/var/www/nursebot',
-  backupPrefix: '/var/www/nursebot_backup_',
-  maxBackups: 3,
-  branch: 'main'
+  containerName: 'nursebot',
+  containerPath: '/usr/share/nginx/html',
+  branch: 'main',
+  distDir: 'dist'
 };
 
 const log = (msg: string, emoji = 'ℹ️') => console.log(`${emoji} ${msg}`);
@@ -21,79 +21,66 @@ const error = (msg: string) => {
 };
 
 async function run() {
-  console.log('\n🚀 --- NurseBot PRO : Déploiement Force --- 🚀\n');
+  console.log('\n🚀 --- NurseBot PRO : Déploiement Docker Force --- 🚀\n');
 
   try {
     // 1. Mise à jour via Git
-    log(`Mise à jour du code source depuis ${CONFIG.branch}...`, '🌿');
+    log(`Récupération de la branche ${CONFIG.branch}...`, '🌿');
     try {
       execSync('git fetch origin', { stdio: 'inherit' });
       execSync(`git reset --hard origin/${CONFIG.branch}`, { stdio: 'inherit' });
     } catch (e) {
-      log('Git update impossible ou dossier non Git, utilisation des fichiers locaux...', '⚠️');
+      log('Attention : Git reset impossible, continuation avec les fichiers locaux...', '⚠️');
     }
 
-    // 2. Nettoyage & Installation
-    log('Installation des dépendances...', '📦');
-    // On peut ajouter --force pour garantir une installation propre si nécessaire
+    // 2. Nettoyage et Installation
+    log('Nettoyage du cache et installation des dépendances...', '📦');
     execSync('npm install', { stdio: 'inherit' });
 
     // 3. Build de l'application
-    log('Build de l\'application statique (Vite)...', '🏗️');
-    if (fs.existsSync('dist')) {
-      fs.rmSync('dist', { recursive: true, force: true });
+    log('Génération du build production (Vite)...', '🏗️');
+    if (fs.existsSync(CONFIG.distDir)) {
+      fs.rmSync(CONFIG.distDir, { recursive: true, force: true });
     }
     
-    // IMPORTANT: Injecte les variables d'env du shell actuel dans le build Vite
+    // Injection des variables d'environnement lors du build
     execSync('npm run build', { 
       stdio: 'inherit',
       env: { ...process.env, NODE_ENV: 'production' }
     });
 
-    const distPath = path.resolve('dist');
+    const distPath = path.resolve(CONFIG.distDir);
     if (!fs.existsSync(path.join(distPath, 'index.html'))) {
-      error("Build invalide : index.html absent dans /dist.");
+      error("Le build a échoué : index.html est introuvable dans /dist.");
     }
 
-    // 4. Sauvegarde (Backup)
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const backupPath = `${CONFIG.backupPrefix}${timestamp}`;
-
-    if (fs.existsSync(CONFIG.webRoot)) {
-      log(`Backup de l'ancienne version...`, '🗂️');
-      execSync(`sudo cp -r ${CONFIG.webRoot} ${backupPath}`);
-      log(`Nettoyage du dossier de destination...`, '🧹');
-      execSync(`sudo rm -rf ${CONFIG.webRoot}/*`);
-    } else {
-      execSync(`sudo mkdir -p ${CONFIG.webRoot}`);
+    // 4. Déploiement vers le conteneur Docker
+    log(`Déploiement vers le conteneur [${CONFIG.containerName}]...`, '🚚');
+    
+    // Vérifier si le conteneur est lancé
+    try {
+      execSync(`docker ps -f name=${CONFIG.containerName} --format "{{.Names}}"`);
+    } catch (e) {
+      error(`Le conteneur '${CONFIG.containerName}' ne semble pas être en cours d'exécution.`);
     }
 
-    // 5. Déploiement
-    log(`Déploiement des nouveaux fichiers vers ${CONFIG.webRoot}...`, '🚚');
-    // On utilise -T pour éviter les problèmes de dossiers imbriqués et on force
-    execSync(`sudo cp -rf ${distPath}/* ${CONFIG.webRoot}/`);
+    // Vider le dossier de destination dans le conteneur pour éviter les résidus de vieux builds
+    log(`Nettoyage du dossier cible dans le conteneur...`, '🧹');
+    execSync(`docker exec ${CONFIG.containerName} sh -c "rm -rf ${CONFIG.containerPath}/*"`);
 
-    // 6. Fix Permissions
-    log(`Application des permissions universelles...`, '🔐');
-    execSync(`sudo chmod -R 755 ${CONFIG.webRoot}`);
-    execSync(`sudo chown -R www-data:www-data ${CONFIG.webRoot}`);
+    // Copier les fichiers du dossier dist vers le conteneur
+    log(`Copie des fichiers via docker cp...`, '📤');
+    execSync(`docker cp ${distPath}/. ${CONFIG.containerName}:${CONFIG.containerPath}/`);
 
-    // 7. Nettoyage des vieux backups
-    const parentDir = path.dirname(CONFIG.webRoot);
-    const backups = fs.readdirSync(parentDir)
-      .filter(f => f.startsWith('nursebot_backup_'))
-      .map(f => ({ name: f, time: fs.statSync(path.join(parentDir, f)).mtime.getTime() }))
-      .sort((a, b) => b.time - a.time);
-
-    if (backups.length > CONFIG.maxBackups) {
-      backups.slice(CONFIG.maxBackups).forEach(b => {
-        execSync(`sudo rm -rf ${path.join(parentDir, b.name)}`);
-      });
-    }
+    // 5. Ajustement des permissions à l'intérieur du conteneur (www-data:www-data / UID 33)
+    log(`Correction des permissions (chown 33:33)...`, '🔐');
+    execSync(`docker exec ${CONFIG.containerName} chown -R 33:33 ${CONFIG.containerPath}`);
 
     log('DÉPLOIEMENT TERMINÉ AVEC SUCCÈS !', '✅');
+    log(`Build injecté dans ${CONFIG.containerName}:${CONFIG.containerPath}`, '📍');
     log(`Date du build : ${new Date().toLocaleString('fr-FR')}`, '📅');
-    console.log(`\n🌐 Si les changements ne sont pas visibles, faites CTRL+F5 sur votre navigateur.\n`);
+    
+    console.log(`\n🌐 Si les changements ne sont pas visibles, effectuez un CTRL+F5.`);
 
   } catch (err: any) {
     error(err.message);
