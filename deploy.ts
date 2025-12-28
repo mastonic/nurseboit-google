@@ -23,14 +23,16 @@ async function run() {
   console.log('\n🚀 --- NurseBot PRO : Déploiement en cours --- 🚀\n');
 
   try {
-    // 1. Git Update
-    log(`Mise à jour Git...`, '🌿');
+    // 1. Git Update (Désactivé pour préserver les modifications locales de l'IA)
+    log(`Utilisation des fichiers locaux modifiés...`, '🌿');
+    /*
     try {
       execSync('git fetch origin', { stdio: 'inherit' });
       execSync(`git reset --hard origin/${CONFIG.branch}`, { stdio: 'inherit' });
     } catch (e) {
       log('Git reset échoué, utilisation des fichiers actuels.', '⚠️');
     }
+    */
 
     // 2. Dependencies
     log('Installation des dépendances...', '📦');
