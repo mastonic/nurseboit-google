@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { getStore, saveStore, addLog, checkAppointmentConflict, subscribeToStore, updateAppointment, getCurrentSession } from '../services/store';
+// Removed checkAppointmentConflict which was not exported from store.ts and was unused
+import { getStore, saveStore, addLog, subscribeToStore, updateAppointment, getCurrentSession } from '../services/store';
 import { Appointment, Patient } from '../types';
 
 const PlanningView: React.FC = () => {
@@ -13,7 +13,6 @@ const PlanningView: React.FC = () => {
   
   const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [isQuickAdd, setIsQuickAdd] = useState(false);
 
   useEffect(() => {
     return subscribeToStore(() => {
@@ -30,23 +29,18 @@ const PlanningView: React.FC = () => {
     return appointments;
   }, [appointments, viewMode, session]);
 
-  const hours = Array.from({ length: 15 }, (_, i) => i + 6); // De 6h à 20h
-
-  const filteredSearchPatients = useMemo(() => {
-    if (!patientSearch.trim()) return [];
-    const term = patientSearch.toLowerCase();
-    return store.patients.filter(p => 
-      p.firstName.toLowerCase().includes(term) || 
-      p.lastName.toLowerCase().includes(term) || 
-      p.phone.includes(term)
-    ).slice(0, 5);
-  }, [patientSearch, store.patients]);
+  // Génération dynamique de la plage horaire basée sur les réglages
+  const hours = useMemo(() => {
+    const start = parseInt(store.settings.workingHoursStart.split(':')[0]);
+    const end = parseInt(store.settings.workingHoursEnd.split(':')[0]);
+    const length = end - start + 1;
+    return Array.from({ length }, (_, i) => i + start);
+  }, [store.settings.workingHoursStart, store.settings.workingHoursEnd]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!modalState || !session) return;
 
-    // Seul admin et infirmiereAdmin peuvent modifier le planning des autres
     const formData = new FormData(e.currentTarget);
     const targetNurseId = formData.get('nurseId') as string;
     
@@ -55,7 +49,7 @@ const PlanningView: React.FC = () => {
        return;
     }
 
-    const patientId = selectedPatient?.id || '';
+    const patientId = formData.get('patientId') as string;
     const durationMinutes = parseInt(formData.get('duration') as string);
     const notes = formData.get('notes') as string;
     const time = formData.get('time') as string;
@@ -199,10 +193,10 @@ const PlanningView: React.FC = () => {
       </div>
 
       {modalState && (
-         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[70] p-4">
+         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
             <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300">
               <div className="p-8 border-b border-slate-100 flex justify-between items-center">
-                 <h3 className="font-black text-2xl">{modalState.mode === 'add' ? 'Planifier un soin' : 'Détails du soin'}</h3>
+                 <h3 className="font-black text-2xl">{modalState.mode === 'add' ? 'Planifier un passage' : 'Détails du passage'}</h3>
                  <button onClick={() => setModalState(null)} className="text-slate-300 hover:text-slate-600 p-2"><i className="fa-solid fa-xmark text-2xl"></i></button>
               </div>
 
@@ -227,7 +221,7 @@ const PlanningView: React.FC = () => {
                 <form onSubmit={handleSubmit} className="p-8 space-y-6">
                    <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Patient</label>
-                      <select name="patientId" required onChange={(e) => setSelectedPatient(store.patients.find(p => p.id === e.target.value) || null)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm">
+                      <select name="patientId" required defaultValue={modalState.data.patientId} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm">
                          <option value="">Sélectionner un patient...</option>
                          {store.patients.map(p => <option key={p.id} value={p.id}>{p.lastName} {p.firstName}</option>)}
                       </select>
@@ -245,10 +239,14 @@ const PlanningView: React.FC = () => {
                       </div>
                    </div>
                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Notes</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Durée prévue (min)</label>
+                      <input name="duration" type="number" defaultValue={store.settings.defaultCareDuration} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+                   </div>
+                   <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Notes du soin</label>
                       <textarea name="notes" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm h-24" placeholder="Instructions particulières..."></textarea>
                    </div>
-                   <button type="submit" className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-200">Enregistrer</button>
+                   <button type="submit" className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-200">Valider la planification</button>
                 </form>
               )}
             </div>

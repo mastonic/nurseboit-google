@@ -6,12 +6,14 @@ import Dashboard from './components/Dashboard';
 import ChatInterface from './components/ChatInterface';
 import BillingView from './components/BillingView';
 import PatientsView from './components/PatientsView';
+import PatientDossier from './components/PatientDossier';
 import PlanningView from './components/PlanningView';
 import PrescriptionView from './components/PrescriptionView';
 import MeetingView from './components/MeetingView';
 import LogsView from './components/LogsView';
 import SettingsView from './components/SettingsView';
 import MessagesView from './components/MessagesView';
+import TransmissionsView from './components/TransmissionsView';
 import TasksView from './components/TasksView';
 import AlertsView from './components/AlertsView';
 import HelpView from './components/HelpView';
@@ -26,6 +28,8 @@ function App() {
         
         <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
         <Route path="/patients" element={<ProtectedRoute><Layout><PatientsView /></Layout></ProtectedRoute>} />
+        <Route path="/patients/:id" element={<ProtectedRoute><Layout><PatientDossier /></Layout></ProtectedRoute>} />
+        <Route path="/transmissions" element={<ProtectedRoute><Layout><TransmissionsView /></Layout></ProtectedRoute>} />
         <Route path="/planning" element={<ProtectedRoute><Layout><PlanningView /></Layout></ProtectedRoute>} />
         <Route path="/prescriptions" element={<ProtectedRoute><Layout><PrescriptionView /></Layout></ProtectedRoute>} />
         

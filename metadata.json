@@ -1,8 +1,15 @@
 {
-  "name": "NurseBot",
-  "description": "Assistant interne intelligent pour cabinets infirmiers : gestion planning, OCR ordonnances, pré-facturation IDEL et communication agents IA.",
+  "name": "NurseBot PRO",
+  "description": "Assistant intelligent pour cabinets IDEL. Orchestration via VPS n8n. Transcription vocale et OCR réels.",
   "requestFramePermissions": [
     "camera",
     "microphone"
-  ]
+  ],
+  "version": "2.0.0",
+  "author": "Architect Agent",
+  "requirements": {
+    "node": ">=18.0.0",
+    "vps": "n8n installed",
+    "api": "Gemini (via n8n)"
+  }
 }

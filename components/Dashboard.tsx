@@ -6,122 +6,170 @@ import { getStore, getCurrentSession } from '../services/store';
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const session = getCurrentSession();
-  const { prescriptions, invoices, appointments, alerts, messages } = getStore();
+  const { appointments, alerts, messages, transmissions } = getStore();
 
   if (!session) return null;
 
-  // Filtrage selon rôle
-  const myApts = appointments.filter(a => a.nurseId === session.userId);
-  const cabinetApts = appointments;
-  const targetApts = session.role === 'admin' ? cabinetApts : myApts;
-
-  const today = new Date().toISOString().split('T')[0];
-  const todayAptsCount = targetApts.filter(a => a.dateTime.startsWith(today) && a.status !== 'cancelled').length;
-  const cabinetTodayCount = cabinetApts.filter(a => a.dateTime.startsWith(today) && a.status !== 'cancelled').length;
-
-  const expiringScripts = prescriptions.filter(p => p.status !== 'expired' && (session.role === 'admin' || p.createdBy === session.userId)).length;
-  const pendingBills = invoices.filter(i => i.status === 'to_prepare' && (session.role !== 'infirmiere')).length;
-  const unreadMessages = messages.filter(m => m.direction === 'inbound' && m.status !== 'read').length;
-
-  const stats = [
-    { label: session.role === 'admin' ? 'Ordonnances Actives' : 'Mes Ordonnances', value: expiringScripts, color: 'text-blue-600', bg: 'bg-blue-50', icon: 'fa-file-medical', path: '/prescriptions' },
-    { label: 'Factures à Préparer', value: pendingBills, color: 'text-amber-600', bg: 'bg-amber-50', icon: 'fa-file-invoice-dollar', path: '/billing', hide: session.role === 'infirmiere' },
-    { label: session.role === 'admin' ? 'Passages Cabinet' : 'Mes passages ce jour', value: todayAptsCount, color: 'text-emerald-600', bg: 'bg-emerald-50', icon: 'fa-calendar-check', path: '/planning' },
-    { label: 'Messages non lus', value: unreadMessages, color: 'text-indigo-600', bg: 'bg-indigo-50', icon: 'fa-message', path: '/messages' },
-  ].filter(s => !s.hide);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const myApts = appointments.filter((a: any) => a.nurseId === session.userId && a.dateTime.startsWith(todayStr));
+  const pendingTrans = transmissions.filter((t: any) => t.status === 'sent' && t.fromId !== session.userId);
+  
+  // Fix: Use process.env instead of import.meta.env to resolve property access error
+  const n8nActive = process.env.VITE_N8N_BASE_URL ? 'OK' : 'OFFLINE';
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Bonjour, {session.name.split(' ')[0]} 👋</h1>
-          <p className="text-slate-500 mt-1 font-medium">
-            {session.role === 'infirmiere' ? (
-              <>Vous avez <span className="text-emerald-600 font-bold">{todayAptsCount} passages</span> prévus aujourd'hui.</>
-            ) : (
-              <>Le cabinet a <span className="text-emerald-600 font-bold">{cabinetTodayCount} patients</span> ce jour ({todayAptsCount} pour vous).</>
-            )}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-           <button onClick={() => navigate('/chat')} className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-slate-800 transition-all flex items-center gap-2">
-             <i className="fa-solid fa-robot"></i> Assistant IA
-           </button>
-           {(session.role === 'admin' || session.role === 'infirmiereAdmin') && (
-             <button onClick={() => navigate('/billing')} className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-emerald-600 transition-all flex items-center gap-2">
-               <i className="fa-solid fa-euro-sign"></i> Facturation
-             </button>
-           )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <button 
-            key={stat.label} 
-            onClick={() => navigate(stat.path)}
-            className={`${stat.bg} p-6 rounded-3xl border border-white shadow-sm transition-all hover:shadow-md hover:scale-[1.03] text-left group`}
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">{stat.label}</p>
-                <p className={`text-4xl font-black mt-2 ${stat.color}`}>{stat.value}</p>
-              </div>
-              <div className={`p-4 rounded-2xl bg-white shadow-sm ${stat.color} group-hover:scale-110 transition-transform`}>
-                <i className={`fa-solid ${stat.icon} text-xl`}></i>
-              </div>
+    <div className="space-y-10 animate-in fade-in duration-700 max-w-7xl mx-auto px-4 pb-20">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl border border-white/5">
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="space-y-4 text-center md:text-left">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
+              Bonjour, <span className="text-emerald-400">{session.name.split(' ')[0]}</span> 👋
+            </h1>
+            <p className="text-slate-400 text-lg font-medium max-w-md">
+              Il y a <span className="text-white font-bold">{myApts.length} passages</span> dans votre tournée aujourd'hui.
+            </p>
+            <div className="flex flex-wrap gap-4 mt-8 justify-center md:justify-start">
+              <button onClick={() => navigate('/chat')} className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center gap-3 shadow-xl shadow-emerald-500/20">
+                <i className="fa-solid fa-microphone-lines text-lg"></i> Assistant IA
+              </button>
+              <button onClick={() => navigate('/planning')} className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-black text-xs uppercase tracking-widest backdrop-blur-md transition-all border border-white/10">
+                Ma Tournée
+              </button>
             </div>
-          </button>
-        ))}
+          </div>
+
+          <div className="flex flex-col items-center justify-center p-8 bg-white/5 rounded-[2.5rem] border border-white/10 backdrop-blur-xl min-w-[280px]">
+            <p className="text-[10px] font-black uppercase text-emerald-400 tracking-[0.2em] mb-4">Aujourd'hui</p>
+            <div className="text-6xl font-black mb-2 tracking-tighter">
+              {myApts.filter((a: any) => a.status === 'done').length}<span className="text-slate-500">/</span>{myApts.length}
+            </div>
+            <div className="w-full h-2 bg-white/10 rounded-full mt-2 overflow-hidden">
+              <div 
+                className="h-full bg-emerald-500 transition-all duration-1000" 
+                style={{ width: `${(myApts.filter((a: any) => a.status === 'done').length / (myApts.length || 1)) * 100}%` }}
+              ></div>
+            </div>
+            <p className="text-[10px] text-slate-400 font-bold mt-4 uppercase tracking-widest">Soins terminés</p>
+          </div>
+        </div>
+        <i className="fa-solid fa-notes-medical absolute -right-20 -bottom-20 text-[20rem] text-white/5 -rotate-12 pointer-events-none"></i>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <h2 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-2">
-            <i className="fa-solid fa-bolt text-amber-500"></i>
-            Raccourcis {session.role}
-          </h2>
-          <div className="grid grid-cols-2 gap-4">
-             <button onClick={() => navigate('/patients')} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all text-left">
-                <i className="fa-solid fa-user-plus text-emerald-500 mb-2"></i>
-                <p className="font-bold text-sm">Nouveau Patient</p>
-                <p className="text-[10px] text-slate-400 font-medium">Lien avec ma tournée</p>
-             </button>
-             <button onClick={() => navigate('/prescriptions')} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all text-left">
-                <i className="fa-solid fa-expand text-blue-500 mb-2"></i>
-                <p className="font-bold text-sm">Scanner Dossier</p>
-                <p className="text-[10px] text-slate-400 font-medium">Extraction IA directe</p>
-             </button>
-             {session.role !== 'infirmiere' && (
-               <button onClick={() => navigate('/billing')} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all text-left">
-                  <i className="fa-solid fa-file-invoice text-amber-500 mb-2"></i>
-                  <p className="font-bold text-sm">Facturer CPAM</p>
-                  <p className="text-[10px] text-slate-400 font-medium">Suivi & Rejets</p>
-               </button>
-             )}
-             <button onClick={() => navigate('/planning')} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all text-left">
-                <i className="fa-solid fa-calendar-day text-rose-500 mb-2"></i>
-                <p className="font-bold text-sm">Ma tournée</p>
-                <p className="text-[10px] text-slate-400 font-medium">Consulter mes RDV</p>
-             </button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          {/* Urgent Priority: Transmissions */}
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/40">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                <div className="w-10 h-10 bg-rose-100 text-rose-500 rounded-xl flex items-center justify-center">
+                  <i className="fa-solid fa-repeat"></i>
+                </div>
+                Transmissions en attente
+              </h2>
+              {pendingTrans.length > 0 && <span className="bg-rose-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse">{pendingTrans.length}</span>}
+            </div>
+            
+            <div className="space-y-4">
+              {pendingTrans.length > 0 ? pendingTrans.map((t: any) => (
+                <div key={t.id} className="p-6 bg-slate-50 border border-slate-100 rounded-3xl flex flex-col md:flex-row gap-6 hover:bg-rose-50/30 transition-all cursor-pointer group" onClick={() => navigate('/transmissions')}>
+                  <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center font-black text-slate-900 group-hover:bg-rose-500 group-hover:text-white transition-all shrink-0">
+                    {t.fromName[0]}
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <p className="font-black text-slate-800 text-sm uppercase tracking-wide">{t.fromName} pour le patient ID: {t.patientId}</p>
+                    <p className="text-sm text-slate-600 font-medium line-clamp-2 italic leading-relaxed">"{t.text}"</p>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-bold self-start md:self-center bg-white px-3 py-1 rounded-lg border border-slate-100">
+                    {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              )) : (
+                <div className="py-12 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-[2rem]">
+                  Aucune transmission prioritaire.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Appointments Grid */}
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/40">
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
+                <i className="fa-solid fa-calendar-check"></i>
+              </div>
+              Prochaines Visites
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {myApts.filter((a:any) => a.status === 'scheduled').slice(0, 4).map((apt: any) => {
+                const patient = getStore().patients.find((p: any) => p.id === apt.patientId);
+                return (
+                  <div key={apt.id} className="p-5 bg-white border border-slate-200 rounded-3xl shadow-sm hover:border-emerald-300 transition-all flex items-center gap-4 cursor-pointer" onClick={() => navigate(`/patients/${apt.patientId}`)}>
+                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center font-black text-xs">
+                      {apt.dateTime.split('T')[1].substring(0, 5)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-black text-slate-900 truncate uppercase tracking-tight">{patient?.lastName}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase truncate">{patient?.careType}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 
-        <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-xl relative overflow-hidden">
-           <h2 className="font-bold text-xl mb-6 flex items-center gap-2">
-              <i className="fa-solid fa-bell text-rose-500 animate-pulse"></i>
-              Alertes urgentes
-           </h2>
-           <div className="space-y-4">
-              {alerts.filter(a => !a.isRead && (!a.userId || a.userId === session.userId)).slice(0, 3).map(alert => (
-                 <div key={alert.id} onClick={() => navigate(alert.path)} className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 cursor-pointer transition-all">
-                    <p className="text-xs font-black uppercase text-emerald-400 mb-1">{alert.title}</p>
-                    <p className="text-sm font-medium opacity-80">{alert.message}</p>
+        {/* Status & Alerts Sidebar */}
+        <div className="space-y-8">
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
+            <h3 className="font-black text-slate-900 text-[10px] uppercase tracking-widest text-center">Statut Système</h3>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-3">
+                   <div className={`w-2 h-2 rounded-full ${n8nActive === 'OK' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+                   <span className="text-xs font-black text-slate-700">Passerelle VPS</span>
+                </div>
+                <span className="text-[10px] font-black text-slate-400">{n8nActive}</span>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-3">
+                   <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                   <span className="text-xs font-black text-slate-700">Base Supabase</span>
+                </div>
+                <span className="text-[10px] font-black text-slate-400">CONNECTÉ</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group cursor-pointer" onClick={() => navigate('/chat')}>
+            <div className="relative z-10 space-y-6">
+              <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-slate-950 text-xl shadow-lg">
+                <i className="fa-solid fa-robot"></i>
+              </div>
+              <div>
+                <h3 className="text-xl font-black mb-2">Besoin d'aide ?</h3>
+                <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                  "Prépare la transmission pour Mme Richard" ou "Quels sont mes RDV demain ?"
+                </p>
+              </div>
+            </div>
+            <i className="fa-solid fa-brain absolute -right-8 -bottom-8 text-8xl text-white/5 rotate-12 group-hover:scale-110 transition-transform duration-700"></i>
+          </div>
+          
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
+            <h3 className="font-black text-slate-900 text-[10px] uppercase tracking-widest text-center">Alertes Cabinet</h3>
+            <div className="space-y-4">
+               {alerts.filter((a:any) => !a.isRead).slice(0, 3).map((a:any) => (
+                 <div key={a.id} className="flex gap-4 p-3 hover:bg-slate-50 rounded-xl transition-all cursor-pointer" onClick={() => navigate('/alerts')}>
+                    <div className="w-1 h-10 bg-rose-500/20 rounded-full shrink-0"></div>
+                    <div>
+                       <p className="text-xs font-bold text-slate-800 line-clamp-1">{a.title}</p>
+                       <p className="text-[9px] text-slate-400 font-black uppercase mt-1">{new Date(a.date).toLocaleDateString()}</p>
+                    </div>
                  </div>
-              ))}
-              {alerts.length === 0 && <p className="text-slate-500 text-sm font-medium">Aucune alerte pour le moment.</p>}
-           </div>
-           <i className="fa-solid fa-shield-heart absolute -right-6 -bottom-6 text-9xl text-white/5 -rotate-12"></i>
+               ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

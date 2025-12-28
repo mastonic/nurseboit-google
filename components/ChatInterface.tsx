@@ -1,13 +1,19 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { processUserMessage } from '../services/geminiService';
-import { Role, Message, AgentType } from '../types';
+import { processUserMessage, transcribeVoiceNote } from '../services/geminiService';
+import { getCurrentSession } from '../services/store';
 
 const ChatInterface: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  
+  const session = getCurrentSession();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -15,17 +21,16 @@ const ChatInterface: React.FC = () => {
     }
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+  const handleSendMessage = async (text?: string, isVoice: boolean = false) => {
+    const finalContent = text || inputValue;
+    if (!finalContent.trim()) return;
 
-    // Fix: Using correct fields for Message type (direction and status instead of senderId, isBot, etc.)
-    const userMessage: Message = {
+    const userMessage = {
       id: Date.now().toString(),
-      patientId: 'bot-assistant',
-      direction: 'outbound',
-      text: inputValue,
+      direction: 'outbound' as const,
+      text: finalContent,
       timestamp: new Date().toISOString(),
-      status: 'sent',
+      type: isVoice ? 'voice' : 'text',
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -33,110 +38,184 @@ const ChatInterface: React.FC = () => {
     setIsTyping(true);
 
     try {
-      // Fix: Use correct Role value 'infirmiere' instead of 'nurse'
-      const result = await processUserMessage(inputValue, 'infirmiere', {});
+      const result = await processUserMessage(finalContent, session?.role || 'infirmiere', {});
       
-      // Fix: Using correct fields for Message type (direction: 'inbound' for bot responses)
-      const botMessage: Message = {
+      const botMessage = {
         id: (Date.now() + 1).toString(),
-        patientId: 'bot-assistant',
-        direction: 'inbound',
+        direction: 'inbound' as const,
         text: result.reply,
         timestamp: new Date().toISOString(),
-        status: 'read',
+        intent: result.intent,
+        structuredData: result.structuredData
       };
 
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {
-      console.error(error);
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        direction: 'inbound',
+        text: "La passerelle VPS ne répond pas. Veuillez vérifier votre configuration n8n.",
+        timestamp: new Date().toISOString()
+      }]);
     } finally {
       setIsTyping(false);
     }
   };
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        if (audioBlob.size < 1000) return;
+
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64 = (reader.result as string).split(',')[1];
+          setIsTranscribing(true);
+          try {
+            const res = await transcribeVoiceNote(base64, mimeType);
+            if (res.transcription) {
+              handleSendMessage(res.transcription, true);
+            }
+          } catch (e) {
+            console.error("Vocal error:", e);
+          } finally {
+            setIsTranscribing(false);
+          }
+        };
+        stream.getTracks().forEach(t => t.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      alert("Microphone accès refusé.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-200px)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="p-4 bg-emerald-500 text-white flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-            <i className="fa-solid fa-robot text-lg"></i>
+    <div className="flex flex-col h-[calc(100vh-180px)] bg-white rounded-[3rem] border border-slate-100 shadow-2xl overflow-hidden animate-in fade-in duration-500 max-w-5xl mx-auto">
+      {/* Premium Header */}
+      <div className="p-8 bg-slate-900 text-white flex items-center justify-between shrink-0">
+        <div className="flex items-center space-x-5">
+          <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-xl shadow-emerald-500/10">
+            <i className="fa-solid fa-robot text-2xl"></i>
           </div>
           <div>
-            <h3 className="font-bold">Assistant NurseBot</h3>
-            <p className="text-xs text-emerald-100 flex items-center gap-1">
-              <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-              En ligne • Orchestrateur IA
+            <h3 className="text-xl font-black tracking-tight">NurseBot Orchestrateur</h3>
+            <p className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.2em] mt-1">
+               Passerelle intelligente n8n Connectée
             </p>
           </div>
         </div>
-        <div className="text-xs font-medium px-2 py-1 bg-white/10 rounded border border-white/20 uppercase tracking-wider">
-           Mode Infirmière
+        <div className="hidden md:flex items-center gap-3">
+           <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping"></div>
+           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Canal VPS Sécurisé</span>
         </div>
       </div>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 p-6 space-y-4 overflow-y-auto bg-slate-50">
+      {/* Message Feed */}
+      <div ref={scrollRef} className="flex-1 p-10 space-y-8 overflow-y-auto bg-slate-50/20">
         {messages.length === 0 && (
-          <div className="text-center py-10 space-y-4">
-             <div className="w-16 h-16 bg-white rounded-full mx-auto flex items-center justify-center shadow-sm text-emerald-500">
-               <i className="fa-solid fa-comment-medical text-2xl"></i>
-             </div>
-             <p className="text-slate-400 text-sm max-w-xs mx-auto">
-               "Planifie un pansement pour Jean Dupont demain à 9h" ou "Génère une pré-facture pour Marie Curie"
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-20">
+             <i className="fa-solid fa-microphone-lines text-7xl"></i>
+             <p className="text-sm font-black uppercase tracking-widest max-w-xs leading-relaxed">
+                Utilisez le vocal pour enregistrer une passation ou poser une question clinique.
              </p>
           </div>
         )}
+        
         {messages.map((msg) => (
-          // Fix: Using msg.direction === 'inbound' to identify bot messages instead of non-existent isBot property
           <div key={msg.id} className={`flex ${msg.direction === 'inbound' ? 'justify-start' : 'justify-end'}`}>
-            <div className={`max-w-[80%] rounded-2xl p-4 ${
-              msg.direction === 'inbound' 
-              ? 'bg-white border border-slate-200 text-slate-800 shadow-sm' 
-              : 'bg-emerald-500 text-white shadow-md rounded-br-none'
-            }`}>
-              <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-              <p className={`text-[10px] mt-1 ${msg.direction === 'inbound' ? 'text-slate-400' : 'text-emerald-100'}`}>
-                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
+            <div className="max-w-[85%] space-y-2">
+               <div className={`p-6 rounded-[2.5rem] shadow-xl relative ${
+                 msg.direction === 'inbound' 
+                 ? 'bg-white text-slate-800 border border-slate-100 rounded-bl-none' 
+                 : 'bg-slate-900 text-white rounded-br-none'
+               }`}>
+                 {msg.type === 'voice' && (
+                    <div className="flex items-center gap-2 mb-3 text-[9px] font-black uppercase tracking-widest opacity-50">
+                       <i className="fa-solid fa-waveform"></i> Transcription Vocale VPS
+                    </div>
+                 )}
+                 <p className="text-sm font-bold leading-relaxed">{msg.text}</p>
+                 <p className="text-[9px] mt-4 font-black uppercase tracking-widest opacity-40 text-right">
+                   {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                 </p>
+               </div>
+               
+               {msg.direction === 'inbound' && msg.intent && (
+                  <div className="flex flex-wrap gap-2 animate-in slide-in-from-left duration-500 ml-4">
+                     <button className="px-4 py-2 bg-emerald-500 text-slate-950 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/10">
+                        {msg.intent === 'TRANSMISSION' ? 'Valider Transmission' : 'Ajouter Note Dossier'}
+                     </button>
+                     <button className="px-4 py-2 bg-slate-100 text-slate-400 rounded-xl text-[9px] font-black uppercase tracking-widest">Ignorer</button>
+                  </div>
+               )}
             </div>
           </div>
         ))}
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
-              <div className="flex space-x-1">
-                <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce"></div>
-                <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce delay-100"></div>
-                <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce delay-200"></div>
+
+        {(isTyping || isTranscribing) && (
+          <div className="flex justify-start animate-in slide-in-from-bottom-2">
+            <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xl flex items-center gap-4">
+              <div className="flex space-x-1.5">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce delay-100"></div>
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce delay-200"></div>
               </div>
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {isTranscribing ? "Le VPS transcrit l'audio..." : "L'IA réfléchit..."}
+              </span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Input */}
-      <div className="p-4 bg-white border-t border-slate-200">
-        <div className="relative flex items-center space-x-2">
-           <button className="p-2 text-slate-400 hover:text-emerald-500 transition-colors">
-              <i className="fa-solid fa-microphone text-lg"></i>
+      {/* Input Section */}
+      <div className="p-8 bg-white border-t border-slate-100">
+        <div className="flex items-center gap-5 relative">
+           <button 
+             onMouseDown={startRecording}
+             onMouseUp={stopRecording}
+             className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse shadow-xl' : 'bg-slate-100 text-slate-400 hover:bg-emerald-500 hover:text-slate-950 shadow-inner'}`}
+           >
+              <i className="fa-solid fa-microphone text-xl"></i>
            </button>
-           <button className="p-2 text-slate-400 hover:text-emerald-500 transition-colors">
-              <i className="fa-solid fa-camera text-lg"></i>
-           </button>
+           
            <input 
             type="text" 
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder="Tapez votre demande ici..." 
-            className="flex-1 bg-slate-100 border-none rounded-full py-3 px-6 text-sm focus:ring-2 focus:ring-emerald-500 transition-all"
+            placeholder={isRecording ? "Enregistrement en cours..." : "Posez une question ou dictez un soin..."}
+            className="flex-1 bg-slate-50 border-none rounded-[1.5rem] py-5 px-8 text-sm font-black focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-inner"
            />
+           
            <button 
-            onClick={handleSendMessage}
-            className="p-3 bg-emerald-500 text-white rounded-full hover:bg-emerald-600 transition-all shadow-md active:scale-95"
+            onClick={() => handleSendMessage()}
+            disabled={!inputValue.trim()}
+            className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-xl disabled:opacity-20 active:scale-95"
            >
-              <i className="fa-solid fa-paper-plane"></i>
+              <i className="fa-solid fa-paper-plane text-xl"></i>
            </button>
         </div>
       </div>

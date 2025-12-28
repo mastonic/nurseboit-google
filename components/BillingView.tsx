@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { getStore, addLog, saveStore, calculateInvoiceTotal, updateInvoice, subscribeToStore } from '../services/store';
 import { NGAP_CATALOG } from '../constants';
@@ -21,12 +20,20 @@ const BillingView: React.FC = () => {
   const handleSaveInvoice = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const formElements = e.currentTarget.elements;
+
     const patientId = formData.get('patientId') as string;
     const date = formData.get('date') as string;
     const km = parseFloat(formData.get('km') as string) || 0;
-    const isSunday = (e.currentTarget.elements.namedItem('sunday') as HTMLInputElement).checked;
-    const isNight = (e.currentTarget.elements.namedItem('night') as HTMLInputElement).checked;
-    const isIFI = (e.currentTarget.elements.namedItem('ifi') as HTMLInputElement).checked;
+    
+    // Accès sécurisé aux cases à cocher
+    const sundayEl = formElements.namedItem('sunday') as HTMLInputElement | null;
+    const nightEl = formElements.namedItem('night') as HTMLInputElement | null;
+    const ifiEl = formElements.namedItem('ifi') as HTMLInputElement | null;
+
+    const isSunday = sundayEl?.checked || false;
+    const isNight = nightEl?.checked || false;
+    const isIFI = ifiEl?.checked || false;
     
     // Récupération des actes sélectionnés
     const selectedActsCodes = Array.from(formData.getAll('acts')) as string[];
@@ -36,7 +43,6 @@ const BillingView: React.FC = () => {
     if (isSunday) majorations.push({ label: 'Dimanche/Férié', amount: 8.50 });
     if (isNight) majorations.push({ label: 'Majoration Nuit', amount: 9.15 });
 
-    // BUG-005: Correct mutually exclusive IFI vs IK logic
     const displacement = { 
       type: isIFI ? 'IFI' as const : 'IK' as const, 
       distance: isIFI ? 0 : km, 

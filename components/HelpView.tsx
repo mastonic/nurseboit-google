@@ -3,79 +3,68 @@ import React from 'react';
 
 const HelpView: React.FC = () => {
   return (
-    <div className="max-w-4xl mx-auto space-y-12 pb-20">
+    <div className="max-w-4xl mx-auto space-y-12 pb-20 animate-in fade-in duration-700">
       <section className="text-center space-y-4">
-        <div className="w-20 h-20 bg-emerald-500 text-white rounded-3xl flex items-center justify-center mx-auto shadow-2xl shadow-emerald-200 rotate-3">
-           <i className="fa-solid fa-user-nurse text-4xl"></i>
+        <div className="w-24 h-24 bg-emerald-500 text-white rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-emerald-500/20 rotate-6">
+           <i className="fa-solid fa-user-nurse text-5xl"></i>
         </div>
-        <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Bienvenue sur NurseBot Bêta</h1>
-        <p className="text-lg text-slate-500 font-medium max-w-xl mx-auto">Nous transformons votre quotidien d'IDEL avec l'intelligence artificielle. Voici comment tirer profit de ce test de 15 jours.</p>
+        <h1 className="text-5xl font-black text-slate-900 tracking-tighter mt-8">Test Client : NurseBot PRO</h1>
+        <p className="text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed">
+           Bienvenue dans votre environnement de test de 15 jours. NurseBot est configuré pour votre cabinet afin d'éliminer vos tâches administratives répétitives.
+        </p>
       </section>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-            <h2 className="font-black text-xl text-slate-900 flex items-center gap-3">
-               <i className="fa-solid fa-list-check text-emerald-500"></i>
-               Guide de test (15 jours)
+         <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-xl space-y-8">
+            <h2 className="font-black text-2xl text-slate-900 flex items-center gap-4">
+               <i className="fa-solid fa-vial text-emerald-500"></i>
+               Objectifs du Test
             </h2>
-            <ul className="space-y-4">
+            <div className="space-y-6">
                {[
-                 { t: "Jour 1", d: "Créez vos dossiers patients actifs." },
-                 { t: "Jour 2", d: "Scannez vos ordonnances pour tester l'OCR Bêta." },
-                 { t: "Jour 3", d: "Planifiez vos tournées de la semaine prochaine." },
-                 { t: "Jour 4", d: "Générez vos premières pré-factures NGAP." },
-                 { t: "Jour 5", d: "Testez l'assistant IA pour poser des questions sur le planning." }
-               ].map((step, i) => (
-                 <li key={i} className="flex gap-4">
-                    <span className="font-black text-emerald-500 tabular-nums">{step.t}</span>
-                    <p className="text-sm font-bold text-slate-600">{step.d}</p>
-                 </li>
-               ))}
-            </ul>
-         </div>
-
-         <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-xl space-y-6 relative overflow-hidden">
-            <h2 className="font-black text-xl flex items-center gap-3 relative z-10">
-               <i className="fa-solid fa-map-location-dot text-emerald-400"></i>
-               Roadmap Bêta
-            </h2>
-            <div className="space-y-4 relative z-10">
-               {[
-                 { t: "Juin 2024", d: "Synchronisation Google Calendar" },
-                 { t: "Juillet 2024", d: "Connexion Twilio / WhatsApp réelle" },
-                 { t: "Septembre 2024", d: "Version mobile native (iOS/Android)" },
-                 { t: "Fin 2024", d: "Module télétransmission agréé" }
-               ].map((item, i) => (
-                 <div key={i} className="flex items-center justify-between group">
+                 { t: "Validation OCR", d: "Scannez au moins 10 ordonnances réelles pour valider la précision de l'extraction IA." },
+                 { t: "Planning Dynamique", d: "Gérez vos tournées communes et testez les alertes de conflits." },
+                 { t: "Cotation NGAP", d: "Générez des pré-factures pour vos patients complexes (BSI, Pansements AMI4)." },
+                 { t: "Assistant IA", d: "Utilisez le chat pour demander 'Qui doit passer chez Mme Martin demain ?'." }
+               ].map((goal, i) => (
+                 <div key={i} className="flex gap-4">
+                    <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center font-black shrink-0 text-sm">{i+1}</div>
                     <div>
-                       <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{item.t}</p>
-                       <p className="text-sm font-bold">{item.d}</p>
-                    </div>
-                    <div className="w-6 h-6 rounded-full border border-slate-700 flex items-center justify-center text-[8px] group-hover:bg-emerald-500 group-hover:border-emerald-500 transition-all">
-                       <i className="fa-solid fa-clock"></i>
+                       <p className="font-black text-slate-800">{goal.t}</p>
+                       <p className="text-sm text-slate-500 font-medium mt-1 leading-relaxed">{goal.d}</p>
                     </div>
                  </div>
                ))}
             </div>
-            <i className="fa-solid fa-rocket absolute -right-6 -bottom-6 text-9xl text-white/5 -rotate-12"></i>
+         </div>
+
+         <div className="bg-slate-900 text-white p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
+            <h2 className="font-black text-2xl mb-8 flex items-center gap-4 relative z-10">
+               <i className="fa-solid fa-shield-halved text-emerald-400"></i>
+               Sécurité des données
+            </h2>
+            <div className="space-y-6 relative z-10">
+               <p className="text-slate-400 text-sm font-medium leading-relaxed">
+                  Pendant cette période de test, vos données sont stockées dans le <span className="text-white font-bold">Local Storage sécurisé</span> de votre navigateur.
+               </p>
+               <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-4">
+                  <div className="flex items-center gap-3">
+                     <i className="fa-solid fa-lock text-emerald-400 text-xs"></i>
+                     <p className="text-xs font-bold uppercase tracking-widest text-emerald-400">Conformité RGPD</p>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-medium leading-normal italic">
+                     Aucune donnée de santé n'est stockée sur nos serveurs sans votre accord explicite lors du passage en production finale (HDS). L'IA Gemini traite les données de manière éphémère.
+                  </p>
+               </div>
+            </div>
+            <i className="fa-solid fa-microchip absolute -right-10 -bottom-10 text-[15rem] text-white/5 -rotate-12"></i>
          </div>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 p-8 rounded-3xl space-y-4">
-         <h3 className="font-black text-amber-900 flex items-center gap-2">
-            <i className="fa-solid fa-triangle-exclamation"></i>
-            Avertissement Légal
-         </h3>
-         <p className="text-sm font-medium text-amber-800 leading-relaxed">
-            NurseBot est un assistant de coordination en version Bêta. Il ne constitue pas un dispositif médical et les données extraites par l'IA (ordonnances, NGAP) doivent être impérativement vérifiées par un professionnel de santé. 
-            <br/><br/>
-            <strong>Important :</strong> La facturation générée est une "Pré-facture" informative. Vous devez utiliser votre logiciel agréé SESAM-Vitale habituel pour la télétransmission CPAM officielle.
-         </p>
-      </div>
-
-      <div className="text-center text-slate-400 py-10">
-         <p className="text-xs font-bold uppercase tracking-widest">Besoin d'aide supplémentaire ?</p>
-         <p className="text-sm font-medium mt-1">support@nursebot.ai • +33 1 23 45 67 89</p>
+      <div className="bg-emerald-50 border border-emerald-100 p-10 rounded-[3rem] text-center space-y-4">
+         <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">Une question ? Un bug ?</p>
+         <h3 className="text-2xl font-black text-emerald-900 leading-none">support-premium@nursebot.ai</h3>
+         <p className="text-sm font-bold text-emerald-700 opacity-70">Ligne directe IDEL : +33 1 23 45 67 89</p>
       </div>
     </div>
   );

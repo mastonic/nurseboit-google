@@ -21,6 +21,33 @@ export interface UserSession {
   expiresAt: string;
 }
 
+export interface Transmission {
+  id: string;
+  patientId: string;
+  fromId: string;
+  fromName: string;
+  toId?: string; // Si spécifique, sinon cabinet
+  toName?: string;
+  text: string;
+  category: 'clinique' | 'social' | 'logistique' | 'urgence';
+  priority: 'low' | 'medium' | 'high';
+  status: 'draft' | 'sent' | 'received' | 'closed';
+  timestamp: string;
+  readAt?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  threadId: string; // cabinet, patient-id, ou private-pair
+  authorId: string;
+  authorName: string;
+  text: string;
+  audioUrl?: string;
+  patientId?: string;
+  timestamp: string;
+  type: 'text' | 'voice' | 'system';
+}
+
 export interface Patient {
   id: string;
   firstName: string;
@@ -32,13 +59,25 @@ export interface Patient {
   email?: string;
   birthDate?: string;
   gender?: 'M' | 'F' | 'Autre';
+  nir?: string; // Numéro de sécurité sociale
+  medecinTraitant?: string;
+  contactUrgence?: string;
+  
+  // Profil médical
   careType: string;
   recurrence: string;
-  notes: string;
-  prescriber?: string;
+  pathologies?: string[];
+  allergies?: string[];
+  protocoles?: string;
+  notes: string; // Notes privées infirmières
+  
+  // Administratif
+  isALD: boolean;
   mutuelle?: string;
+  
   archived?: boolean;
   createdBy?: string;
+  assignedNurseIds?: string[]; // Pour le RBAC
 }
 
 export interface Appointment {
@@ -104,9 +143,9 @@ export interface Task {
 
 export interface Alert {
   id: string;
-  type: 'prescription' | 'billing' | 'message' | 'system';
+  type: 'prescription' | 'billing' | 'message' | 'system' | 'transmission';
   patientId?: string;
-  userId?: string; // Cible spécifique (si null = tout le cabinet)
+  userId?: string;
   title: string;
   message: string;
   date: string;
@@ -114,18 +153,12 @@ export interface Alert {
   isRead: boolean;
 }
 
-export interface McpServer {
-  id: string;
-  name: string;
-  url: string;
-  status: 'connected' | 'disconnected' | 'error';
-  type: 'medical_db' | 'cabinet_hds' | 'rpps_directory';
-}
-
 export interface ApiConfig {
   twilioSid: string;
   twilioToken: string;
   twilioPhone: string;
+  twilioWebhookUrl: string;
+  n8nApiKey: string;
   resendKey: string;
   googleCalendarSync: boolean;
 }
@@ -134,5 +167,6 @@ export enum AgentType {
   ORCHESTRATOR = 'ORCHESTRATOR',
   PLANNING = 'PLANNING',
   PRESCRIPTION = 'PRESCRIPTION',
-  BILLING = 'BILLING'
+  BILLING = 'BILLING',
+  TRANSMISSION = 'TRANSMISSION'
 }

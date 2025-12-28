@@ -1,14 +1,17 @@
-
-import React, { useState, useEffect } from 'react';
-import { getStore, addLog, saveStore, subscribeToStore, updateSettings, getCurrentSession, updateUser } from '../services/store';
-import { User, McpServer, ApiConfig, Role } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { getStore, subscribeToStore, updateSettings, getCurrentSession } from '../services/store';
+import { ApiConfig } from '../types';
 
 const SettingsView: React.FC = () => {
   const session = getCurrentSession();
   const [store, setStore] = useState(getStore());
-  const [activeTab, setActiveTab] = useState<'general' | 'team' | 'api' | 'mcp'>('general');
-  const [showUserModal, setShowUserModal] = useState<'add' | User | null>(null);
+  const [activeTab, setActiveTab] = useState<'general' | 'team' | 'api' | 'sql'>('api');
   const [showSavedToast, setShowSavedToast] = useState(false);
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
+  
+  const webhookUrlRef = useRef<HTMLInputElement>(null);
+  const n8nApiKeyRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     return subscribeToStore(() => {
@@ -16,324 +19,308 @@ const SettingsView: React.FC = () => {
     });
   }, []);
 
-  useEffect(() => {
-    if (showSavedToast) {
-      const timer = setTimeout(() => setShowSavedToast(false), 3000);
-      return () => clearTimeout(timer);
+  const handleTestConnection = async () => {
+    let url = webhookUrlRef.current?.value || store.settings.apiConfig.twilioWebhookUrl;
+    let apiKey = n8nApiKeyRef.current?.value || store.settings.apiConfig.n8nApiKey;
+    
+    if (!url) {
+      setTestStatus('error');
+      setErrorMessage("L'URL du Webhook est vide. Veuillez saisir une adresse (ex: https://n8n.votre-serveur.fr/webhook/...)");
+      webhookUrlRef.current?.focus();
+      return;
     }
-  }, [showSavedToast]);
 
-  const handleUpdateGeneralSettings = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    updateSettings({
-      cabinetName: formData.get('cabinetName') as string,
-      cabinetPhone: formData.get('cabinetPhone') as string,
-      cabinetAddress: formData.get('cabinetAddress') as string,
-      defaultCareDuration: parseInt(formData.get('defaultCareDuration') as string),
-      workingHoursStart: formData.get('workingHoursStart') as string,
-      workingHoursEnd: formData.get('workingHoursEnd') as string,
-      autoArchivePrescriptions: (e.currentTarget.elements.namedItem('autoArchive') as HTMLInputElement).checked
-    });
-    setShowSavedToast(true);
+    // Nettoyage et validation de l'URL
+    url = url.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+      if (webhookUrlRef.current) webhookUrlRef.current.value = url;
+    }
+
+    setTestStatus('loading');
+    setErrorMessage('');
+    
+    try {
+      console.log(`Tentative de connexion à n8n: ${url}`);
+      
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 8000); // Timeout 8s
+
+      const response = await fetch(url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-N8N-API-KEY': apiKey
+        },
+        body: JSON.stringify({ 
+          event: 'ping', 
+          timestamp: new Date().toISOString(),
+          source: 'NurseBot Webapp Test',
+          nurse: session?.name || 'Inconnue'
+        })
+      });
+
+      clearTimeout(id);
+
+      if (response.ok || response.status === 200) {
+        setTestStatus('success');
+        setTimeout(() => setTestStatus('idle'), 3000);
+      } else {
+        const errorText = await response.text().catch(() => "Aucun détail d'erreur");
+        throw new Error(`Erreur HTTP ${response.status} : ${errorText}`);
+      }
+    } catch (err: any) {
+      console.error("Erreur détaillée test n8n:", err);
+      setTestStatus('error');
+      
+      if (err.name === 'AbortError') {
+        setErrorMessage("Délai d'attente dépassé (8s). Le serveur n8n ne répond pas ou l'URL est incorrecte.");
+      } else if (err.message === 'Failed to fetch') {
+        setErrorMessage(
+          "ERREUR RÉSEAU (Failed to fetch). \n\n" +
+          "CAUSES PROBABLES :\n" +
+          "1. CORS : n8n bloque l'accès depuis ce navigateur. \n   Solution: Réglez N8N_CORS_ALLOWED_ORIGINS=* dans n8n.\n" +
+          "2. HTTPS : Vous appelez un serveur http:// depuis ce site en https://. Le navigateur bloque par sécurité.\n" +
+          "3. DISPONIBILITÉ : L'URL n'est pas accessible publiquement ou le serveur est éteint.\n\n" +
+          "ASTUCE : Testez l'URL dans un outil comme Postman ou via cURL. Si ça marche là-bas, c'est un problème de CORS."
+        );
+      } else {
+        setErrorMessage(err.message);
+      }
+    }
+  };
+
+  const copyCurl = () => {
+    const url = webhookUrlRef.current?.value || store.settings.apiConfig.twilioWebhookUrl;
+    const apiKey = n8nApiKeyRef.current?.value || store.settings.apiConfig.n8nApiKey;
+    const curl = `curl -X POST "${url}" \\
+     -H "Content-Type: application/json" \\
+     -H "X-N8N-API-KEY: ${apiKey}" \\
+     -d '{"event":"ping", "source":"nursebot_curl"}'`;
+    
+    navigator.clipboard.writeText(curl);
+    alert("Commande cURL copiée ! Testez-la dans votre terminal pour vérifier si le serveur répond.");
   };
 
   const handleUpdateApiConfig = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const newConfig: Partial<ApiConfig> = {
-      twilioSid: formData.get('twilioSid') as string,
-      twilioToken: formData.get('twilioToken') as string,
-      twilioPhone: formData.get('twilioPhone') as string,
-      resendKey: formData.get('resendKey') as string,
-      googleCalendarSync: (e.currentTarget.elements.namedItem('googleSync') as HTMLInputElement).checked
-    };
-    updateSettings({ apiConfig: newConfig as ApiConfig });
-    setShowSavedToast(true);
-  };
-
-  const handleUserSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!session) return;
-    const formData = new FormData(e.currentTarget);
-    const firstName = formData.get('firstName') as string;
-    const lastName = formData.get('lastName') as string;
-    const role = formData.get('role') as Role;
-    const pin = formData.get('pin') as string;
-    const active = (e.currentTarget.elements.namedItem('active') as HTMLInputElement)?.checked ?? true;
-
-    if (showUserModal === 'add') {
-      const newUser: User = {
-         id: `u-${Date.now()}`,
-         firstName,
-         lastName,
-         role,
-         pin,
-         active
-      };
-      saveStore({ users: [...store.users, newUser] });
-      addLog(`Nouvel utilisateur créé : ${firstName}`, session.userId);
-    } else if (typeof showUserModal === 'object') {
-      const updatedUser: User = {
-        ...showUserModal,
-        firstName,
-        lastName,
-        role,
-        pin,
-        active
-      };
-      updateUser(updatedUser);
+    const formElements = e.currentTarget.elements;
+    
+    const googleSyncEl = formElements.namedItem('googleSync') as HTMLInputElement | null;
+    let webhookUrl = formData.get('twilioWebhookUrl') as string || '';
+    
+    if (webhookUrl && !webhookUrl.startsWith('http')) {
+      webhookUrl = 'https://' + webhookUrl;
     }
     
-    setShowUserModal(null);
+    const newConfig: ApiConfig = {
+      twilioSid: formData.get('twilioSid') as string || '',
+      twilioToken: formData.get('twilioToken') as string || '',
+      twilioPhone: formData.get('twilioPhone') as string || '',
+      twilioWebhookUrl: webhookUrl,
+      n8nApiKey: formData.get('n8nApiKey') as string || '',
+      resendKey: formData.get('resendKey') as string || '',
+      googleCalendarSync: googleSyncEl ? googleSyncEl.checked : false
+    };
+    
+    updateSettings({ apiConfig: newConfig });
     setShowSavedToast(true);
+    setTimeout(() => setShowSavedToast(false), 3000);
   };
 
-  if (!session || session.role === 'infirmiere') return <div className="p-10 text-center font-bold text-rose-500">Accès non autorisé.</div>;
+  const emergencyFixSql = `ALTER TABLE patients ADD COLUMN IF NOT EXISTS phone TEXT UNIQUE;`;
+
+  if (!session || (session.role !== 'admin' && session.role !== 'infirmiereAdmin')) {
+    return <div className="p-10 text-center font-bold text-rose-500">Accès non autorisé.</div>;
+  }
 
   return (
-    <div className="space-y-8 pb-20 relative">
+    <div className="space-y-8 pb-20 relative animate-in fade-in duration-500">
       {showSavedToast && (
-        <div className="fixed top-20 right-8 z-[100] animate-in slide-in-from-right duration-300">
+        <div className="fixed top-20 right-8 z-[100] animate-in slide-in-from-right">
            <div className="bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-emerald-400">
-              <i className="fa-solid fa-circle-check text-xl"></i>
-              <p className="font-black text-sm uppercase tracking-widest">Enregistré avec succès</p>
+              <i className="fa-solid fa-check-circle text-xl"></i>
+              <p className="font-black text-sm uppercase tracking-widest">Configuration Enregistrée</p>
            </div>
         </div>
       )}
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900">Configuration Cabinet</h1>
-          <p className="text-slate-500 text-sm font-medium">Gérez l'identité de votre structure et votre équipe.</p>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Configuration</h1>
+          <p className="text-slate-500 font-medium">Paramétrage technique & Intégrations</p>
         </div>
-        <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
-           {(['general', 'team', 'api', 'mcp'] as const).map(tab => {
-              if (tab === 'api' && session.role !== 'admin') return null;
-              return (
-                <button 
-                  key={tab} 
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                   {tab === 'general' ? 'Général' : tab === 'team' ? 'Équipe' : tab === 'api' ? 'APIs' : 'MCP'}
-                </button>
-              );
-           })}
+        <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl shrink-0">
+           {(['general', 'team', 'api', 'sql'] as const).map(tab => (
+              <button 
+                key={tab} 
+                onClick={() => setActiveTab(tab)}
+                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-emerald-500 shadow-md' : 'text-slate-400'}`}
+              >
+                 {tab === 'general' ? 'Général' : tab === 'team' ? 'Équipe' : tab === 'api' ? 'n8n / Twilio' : 'SQL'}
+              </button>
+           ))}
         </div>
       </div>
 
-      {activeTab === 'general' && (
-        <div className="animate-in fade-in duration-300">
-          <form onSubmit={handleUpdateGeneralSettings} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
-              <h2 className="font-black text-lg text-slate-800 flex items-center gap-2">
-                 <i className="fa-solid fa-hospital text-emerald-500"></i>
-                 Identité du Cabinet
-              </h2>
-              <div className="space-y-4">
-                <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nom commercial</label>
-                   <input name="cabinetName" required defaultValue={store.settings.cabinetName} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                </div>
-                <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Téléphone professionnel</label>
-                   <input name="cabinetPhone" required defaultValue={store.settings.cabinetPhone} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                </div>
-                <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Adresse du cabinet</label>
-                   <textarea name="cabinetAddress" required defaultValue={store.settings.cabinetAddress} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm h-24" />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-8">
-              <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
-                <h2 className="font-black text-lg text-slate-800 flex items-center gap-2">
-                   <i className="fa-solid fa-clock text-emerald-500"></i>
-                   Fonctionnement & Tournée
-                </h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Début tournée</label>
-                     <input name="workingHoursStart" type="time" defaultValue={store.settings.workingHoursStart} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                  </div>
-                  <div className="space-y-1">
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fin tournée</label>
-                     <input name="workingHoursEnd" type="time" defaultValue={store.settings.workingHoursEnd} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Durée par défaut d'un soin (min)</label>
-                   <input name="defaultCareDuration" type="number" defaultValue={store.settings.defaultCareDuration} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                </div>
-                <div className="pt-4 space-y-4 border-t border-slate-100">
-                   <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-bold text-slate-700">Archivage automatique</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ordonnances expirées</p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" name="autoArchive" defaultChecked={store.settings.autoArchivePrescriptions} className="sr-only peer" />
-                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                      </label>
-                   </div>
-                </div>
-              </div>
-              <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest shadow-xl hover:bg-slate-800 transition-all active:scale-[0.98]">
-                Enregistrer les changements
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {activeTab === 'team' && (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
-           <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-              <div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight">L'Équipe du Cabinet</h2>
-                <p className="text-slate-500 text-xs font-medium">Gérez les accès et les profils de vos collaborateurs.</p>
-              </div>
-              <button 
-                onClick={() => setShowUserModal('add')} 
-                className="px-6 py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-all"
-              >
-                Ajouter un profil
-              </button>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {store.users.map(user => (
-                <div key={user.id} className={`bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col justify-between transition-all group ${user.active ? 'border-slate-200' : 'border-rose-100 bg-rose-50/30 grayscale'}`}>
-                   <div className="flex items-start justify-between mb-6">
-                      <div className="flex items-center gap-4">
-                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-lg ${user.active ? 'bg-emerald-50 text-emerald-500 border border-emerald-100' : 'bg-slate-100 text-slate-400'}`}>
-                            {user.firstName[0]}
-                         </div>
-                         <div>
-                            <h4 className="font-black text-slate-900 leading-none mb-1">{user.firstName} {user.lastName}</h4>
-                            <p className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">{user.role}</p>
-                         </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter ${user.active ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                          {user.active ? 'Actif' : 'Inactif'}
-                        </span>
-                      </div>
-                   </div>
-                   
-                   <div className="flex items-center justify-between pt-6 border-t border-slate-50">
-                      <div className="text-left">
-                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Code PIN</p>
-                         <p className="font-mono font-bold text-sm text-slate-600 tracking-widest">••••</p>
-                      </div>
-                      <div className="flex gap-2">
-                         <button 
-                           onClick={() => setShowUserModal(user)} 
-                           className="w-10 h-10 bg-slate-100 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl flex items-center justify-center transition-all"
-                         >
-                            <i className="fa-solid fa-pen-to-square"></i>
-                         </button>
-                         {session.role === 'admin' && user.id !== session.userId && (
-                           <button 
-                            onClick={() => { if(confirm(`Supprimer l'utilisateur ${user.firstName} ?`)) saveStore({ users: store.users.filter(u => u.id !== user.id) }); }} 
-                            className="w-10 h-10 bg-slate-100 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl flex items-center justify-center transition-all"
-                           >
-                            <i className="fa-solid fa-trash-can"></i>
-                           </button>
-                         )}
-                      </div>
-                   </div>
-                </div>
-              ))}
-           </div>
-        </div>
-      )}
-
-      {activeTab === 'api' && session.role === 'admin' && (
-        <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm animate-in slide-in-from-bottom-4 duration-300">
-           <form onSubmit={handleUpdateApiConfig} className="space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 <div className="space-y-4">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <i className="fa-brands fa-whatsapp text-emerald-500"></i>
-                      Twilio WhatsApp
-                    </h3>
-                    <input name="twilioSid" placeholder="Account SID" defaultValue={store.settings.apiConfig.twilioSid} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                    <input name="twilioToken" type="password" placeholder="Auth Token" defaultValue={store.settings.apiConfig.twilioToken} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                    <input name="twilioPhone" placeholder="Numéro Twilio" defaultValue={store.settings.apiConfig.twilioPhone} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+      {activeTab === 'api' && (
+        <div className="space-y-8">
+           <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+                 <div className="space-y-1">
+                    <h3 className="font-black text-xl text-slate-900">Diagnostic de la passerelle n8n</h3>
+                    <p className="text-xs text-slate-400 font-medium italic">Testez la connectivité et identifiez les problèmes de CORS.</p>
                  </div>
-                 <div className="space-y-4">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <i className="fa-solid fa-calendar-check text-blue-500"></i>
-                      Google Calendar
-                    </h3>
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                         <input type="checkbox" name="googleSync" defaultChecked={store.settings.apiConfig.googleCalendarSync} className="w-5 h-5 rounded text-emerald-500 border-slate-300 focus:ring-emerald-500" />
-                         <span className="text-xs font-bold text-slate-700">Synchronisation auto de la tournée cabinet</span>
-                      </label>
+                 <div className="flex gap-2">
+                    <button 
+                      onClick={copyCurl}
+                      className="px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all flex items-center gap-2"
+                    >
+                       <i className="fa-solid fa-terminal"></i> cURL
+                    </button>
+                    <button 
+                      onClick={handleTestConnection}
+                      disabled={testStatus === 'loading'}
+                      className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-3 shadow-xl ${
+                        testStatus === 'success' ? 'bg-emerald-500 text-white scale-105 shadow-emerald-200' :
+                        testStatus === 'error' ? 'bg-rose-500 text-white animate-shake' :
+                        'bg-slate-900 text-white hover:bg-slate-800'
+                      }`}
+                    >
+                       {testStatus === 'loading' ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-plug"></i>}
+                       {testStatus === 'success' ? 'Réussi !' : testStatus === 'error' ? 'Échec' : 'Tester Webhook'}
+                    </button>
+                 </div>
+              </div>
+
+              {testStatus === 'error' && (
+                 <div className="mb-6 p-6 bg-rose-50 border-2 border-rose-100 rounded-[1.5rem] animate-in slide-in-from-top-4 duration-300">
+                    <div className="flex items-start gap-4">
+                       <i className="fa-solid fa-triangle-exclamation text-rose-500 text-xl mt-1"></i>
+                       <div className="space-y-3 flex-1">
+                          <p className="text-sm text-rose-800 font-black uppercase tracking-tighter">Échec du test de connexion</p>
+                          <div className="bg-white/60 p-4 rounded-xl border border-rose-200">
+                            <p className="text-xs text-rose-700 font-bold leading-relaxed whitespace-pre-wrap font-mono">
+                               {errorMessage}
+                            </p>
+                          </div>
+                          <div className="flex gap-4 items-center">
+                             <a href="https://docs.n8n.io/hosting/configuration/environment-variables/#webhook-variables" target="_blank" rel="noreferrer" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:underline">
+                                <i className="fa-solid fa-book mr-1"></i> Documentation CORS n8n
+                             </a>
+                             <button onClick={copyCurl} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900">
+                                <i className="fa-solid fa-copy mr-1"></i> Copier cURL pour test externe
+                             </button>
+                          </div>
+                       </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 italic">Nécessite une configuration OAuth client ID dans la Google Console.</p>
+                 </div>
+              )}
+
+              <div className="bg-slate-50 p-6 rounded-[1.5rem] border border-slate-100">
+                 <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                   <i className="fa-solid fa-lightbulb mr-2 text-amber-500"></i>
+                   <b>Note sur le 'Failed to fetch' :</b> Cette erreur se produit 99% du temps parce que votre instance n8n n'accepte pas les requêtes cross-origin. Vous devez configurer n8n avec <code>N8N_CORS_ALLOWED_ORIGINS=*</code> pour autoriser NurseBot à lui envoyer des données.
+                 </p>
+              </div>
+           </div>
+
+           <form onSubmit={handleUpdateApiConfig} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                 <h3 className="font-black text-xl text-slate-900 flex items-center gap-3">
+                    <i className="fa-brands fa-whatsapp text-emerald-500"></i>
+                    WhatsApp / Twilio
+                 </h3>
+                 <div className="space-y-4">
+                    <div className="space-y-1">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Account SID</label>
+                       <input name="twilioSid" placeholder="AC..." defaultValue={store.settings.apiConfig.twilioSid} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Numéro Twilio</label>
+                       <input name="twilioPhone" placeholder="whatsapp:+33..." defaultValue={store.settings.apiConfig.twilioPhone} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+                    </div>
                  </div>
               </div>
-              <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl hover:bg-slate-800">
-                Mettre à jour les configurations API
-              </button>
+
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                 <h3 className="font-black text-xl text-slate-900 flex items-center gap-3">
+                    <i className="fa-solid fa-diagram-project text-indigo-500"></i>
+                    Webhooks & Sécurité
+                 </h3>
+                 <div className="space-y-4">
+                    <div className="space-y-1">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">URL Webhook n8n</label>
+                       <input 
+                         ref={webhookUrlRef}
+                         name="twilioWebhookUrl" 
+                         placeholder="https://.../webhook/..." 
+                         defaultValue={store.settings.apiConfig.twilioWebhookUrl} 
+                         className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-inner" 
+                       />
+                    </div>
+                    <div className="space-y-1">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">API Key n8n</label>
+                       <input 
+                         ref={n8nApiKeyRef}
+                         name="n8nApiKey" 
+                         type="password"
+                         placeholder="Clé secrète X-N8N-API-KEY..." 
+                         defaultValue={store.settings.apiConfig.n8nApiKey} 
+                         className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-inner" 
+                       />
+                    </div>
+                    <label className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors">
+                       <input 
+                         name="googleSync" 
+                         type="checkbox" 
+                         defaultChecked={store.settings.apiConfig.googleCalendarSync} 
+                         className="w-5 h-5 text-emerald-500 rounded border-slate-300" 
+                       />
+                       <span className="text-sm font-bold text-slate-700">Synchronisation Calendar</span>
+                    </label>
+                 </div>
+                 <button type="submit" className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-emerald-600 hover:scale-[1.02] active:scale-95 transition-all">
+                    Enregistrer la config
+                 </button>
+              </div>
            </form>
         </div>
       )}
 
-      {showUserModal && (
-         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-            <form onSubmit={handleUserSubmit} className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 space-y-6 animate-in zoom-in duration-200">
-               <div className="flex justify-between items-center mb-2">
-                 <h3 className="font-black text-xl">{showUserModal === 'add' ? 'Créer un profil' : 'Modifier le profil'}</h3>
-                 <button type="button" onClick={() => setShowUserModal(null)} className="text-slate-300 hover:text-slate-600"><i className="fa-solid fa-xmark text-2xl"></i></button>
-               </div>
-               
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prénom</label>
-                    <input name="firstName" required placeholder="Alice" defaultValue={typeof showUserModal === 'object' ? showUserModal.firstName : ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nom</label>
-                    <input name="lastName" required placeholder="Martin" defaultValue={typeof showUserModal === 'object' ? showUserModal.lastName : ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+      {activeTab === 'sql' && (
+         <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl border-4 border-slate-800">
+            <h2 className="text-2xl font-black mb-4 flex items-center gap-3 text-emerald-400">
+               <i className="fa-solid fa-database"></i>
+               Supabase SQL
+            </h2>
+            <div className="space-y-6">
+               <div className="p-6 bg-black/40 rounded-2xl border border-white/5">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-emerald-400 mb-4">Correctif rapide</h4>
+                  <div className="flex flex-col md:flex-row items-center gap-4">
+                    <code className="flex-1 p-3 bg-black/60 rounded-xl text-[10px] font-mono text-emerald-300 border border-white/5 w-full overflow-x-auto">{emergencyFixSql}</code>
+                    <button onClick={() => { navigator.clipboard.writeText(emergencyFixSql); alert("Copié !"); }} className="w-full md:w-auto px-6 py-3 bg-white text-slate-900 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-400 transition-colors shrink-0">Copier</button>
                   </div>
                </div>
-               
-               <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rôle & Permissions</label>
-                  <select name="role" required defaultValue={typeof showUserModal === 'object' ? showUserModal.role : 'infirmiere'} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm">
-                     <option value="infirmiere">Infirmière Terrain</option>
-                     <option value="infirmiereAdmin">Infirmière Coordinatrice</option>
-                     <option value="admin">Administrateur Cabinet</option>
-                  </select>
-               </div>
-               
-               <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Code PIN de sécurité</label>
-                  <input name="pin" required maxLength={6} minLength={4} placeholder="Code à 4 chiffres" defaultValue={typeof showUserModal === 'object' ? showUserModal.pin : ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm font-mono tracking-widest" />
-               </div>
+            </div>
+         </div>
+      )}
 
-               <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                  <span className="text-xs font-bold text-slate-700">Compte actif</span>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" name="active" defaultChecked={typeof showUserModal === 'object' ? showUserModal.active : true} className="sr-only peer" />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                  </label>
+      {activeTab === 'general' && (
+         <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm max-w-2xl">
+            <h3 className="font-black text-2xl mb-8 flex items-center gap-3 text-slate-900">
+               <i className="fa-solid fa-hospital text-emerald-500"></i>
+               Informations Cabinet
+            </h3>
+            <div className="space-y-6">
+               <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nom commercial du cabinet</label>
+                  <input placeholder="Ex: Cabinet des Alizés" defaultValue={store.settings.cabinetName} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm focus:ring-2 focus:ring-emerald-500 transition-all outline-none" />
                </div>
-
-               <div className="flex gap-4 pt-4">
-                  <button type="submit" className="flex-1 py-4 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200">
-                    {showUserModal === 'add' ? 'Créer le compte' : 'Sauvegarder'}
-                  </button>
-                  <button type="button" onClick={() => setShowUserModal(null)} className="px-6 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">
-                    Annuler
-                  </button>
-               </div>
-            </form>
+            </div>
          </div>
       )}
     </div>
