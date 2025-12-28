@@ -1,4 +1,3 @@
-
 import { Patient, Appointment, Prescription, PreInvoice, UserSession, Transmission, Message } from '../types';
 import { MOCK_PATIENTS, MOCK_APPOINTMENTS, MOCK_INVOICES, MOCK_PRESCRIPTIONS, MOCK_NURSES } from '../constants';
 import { createClient } from '@supabase/supabase-js';
@@ -71,7 +70,7 @@ export const initStore = async () => {
       ...state,
       users: (u.data || []).map((user: any) => ({ id: user.id, firstName: user.first_name, lastName: user.last_name, role: user.role, pin: user.pin, active: user.active })),
       patients: (p.data || []).map((pat: any) => ({ ...pat, firstName: pat.first_name, lastName: pat.last_name, careType: pat.care_type, isALD: pat.is_ald })),
-      appointments: (a.data || []).map((apt: any) => ({ id: apt.id, patientId: apt.patient_id, nurseId: apt.nurse_id, dateTime: apt.date_time, status: apt.status })),
+      appointments: (a.data || []).map((apt: any) => ({ id: apt.id, patient_id: apt.patient_id, nurse_id: apt.nurse_id, date_time: apt.date_time, status: apt.status })),
       transmissions: (tr.data || []),
       messages: (m.data || []).map((msg: any) => ({ id: msg.id, patientId: msg.patient_id, direction: msg.direction, text: msg.text, timestamp: msg.created_at, status: msg.status })),
       alerts: (al.data || []).map((alert: any) => ({ id: alert.id, title: alert.title, message: alert.message, date: alert.created_at, isRead: alert.is_read })),
@@ -231,12 +230,9 @@ export const markAlertRead = (id: string) => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-// Fix for MessagesView.tsx error: implement the missing handleIncomingTwilioMessage function
 export const handleIncomingTwilioMessage = async (payload: { From: string; Body: string }) => {
   const { From, Body } = payload;
-  // Normalisation basique du numéro de téléphone pour faire correspondre aux mocks (remplace +33 par 0 et retire les espaces)
   const normalizedFrom = From.replace('+33', '0').replace(/\s/g, '');
-  
   const patient = state.patients.find((p: Patient) => p.phone.replace(/\s/g, '') === normalizedFrom);
   
   if (patient) {
@@ -251,9 +247,7 @@ export const handleIncomingTwilioMessage = async (payload: { From: string; Body:
     state.messages = [newMessage, ...state.messages];
     saveOffline();
     window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-    
     return { role: 'patient' as const, user: patient };
   }
-  
   return { role: 'unknown' as const };
 };
