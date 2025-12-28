@@ -6,8 +6,9 @@ export default defineConfig(({ mode }) => {
   
   return {
     plugins: [react()],
-    base: './',
+    base: './', // Assure que les chemins d'assets sont relatifs pour Nginx
     define: {
+      // Mapping des variables d'environnement pour le navigateur
       'process.env.API_KEY': JSON.stringify(env.API_KEY || ''),
       'process.env.VITE_N8N_BASE_URL': JSON.stringify(env.VITE_N8N_BASE_URL || ''),
       'process.env.VITE_N8N_API_KEY': JSON.stringify(env.VITE_N8N_API_KEY || ''),

@@ -1,4 +1,5 @@
-import { Patient, Appointment, Prescription, PreInvoice, User, Task, Message, Alert, UserSession, Transmission, ChatMessage } from '../types';
+
+import { Patient, Appointment, Prescription, PreInvoice, UserSession, Transmission, Message } from '../types';
 import { MOCK_PATIENTS, MOCK_APPOINTMENTS, MOCK_INVOICES, MOCK_PRESCRIPTIONS, MOCK_NURSES } from '../constants';
 import { createClient } from '@supabase/supabase-js';
 
@@ -193,28 +194,6 @@ export const updateInvoice = (invoice: PreInvoice) => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const handleIncomingTwilioMessage = async (payload: any) => {
-  const from = payload.From;
-  const body = payload.Body;
-  const patient = state.patients.find((p: any) => p.phone === from);
-  
-  if (patient) {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      patientId: patient.id,
-      direction: 'inbound',
-      text: body,
-      timestamp: new Date().toISOString(),
-      status: 'delivered'
-    };
-    state.messages = [newMessage, ...state.messages];
-    saveOffline();
-    window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-    return { role: 'patient' as const, user: patient, message: newMessage };
-  }
-  return { role: 'unknown' as const };
-};
-
 export const addLog = (action: string, userId: string = 'system') => {
   const user = getCurrentSession();
   const localLog = { id: Date.now().toString(), action, user: user?.name || 'Système', timestamp: new Date().toISOString() };
@@ -250,4 +229,31 @@ export const markAlertRead = (id: string) => {
   state.alerts = state.alerts.map((a: any) => a.id === id ? { ...a, isRead: true } : a);
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+// Fix for MessagesView.tsx error: implement the missing handleIncomingTwilioMessage function
+export const handleIncomingTwilioMessage = async (payload: { From: string; Body: string }) => {
+  const { From, Body } = payload;
+  // Normalisation basique du numéro de téléphone pour faire correspondre aux mocks (remplace +33 par 0 et retire les espaces)
+  const normalizedFrom = From.replace('+33', '0').replace(/\s/g, '');
+  
+  const patient = state.patients.find((p: Patient) => p.phone.replace(/\s/g, '') === normalizedFrom);
+  
+  if (patient) {
+    const newMessage: Message = {
+      id: Date.now().toString(),
+      patientId: patient.id,
+      direction: 'inbound',
+      text: Body,
+      timestamp: new Date().toISOString(),
+      status: 'read'
+    };
+    state.messages = [newMessage, ...state.messages];
+    saveOffline();
+    window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+    
+    return { role: 'patient' as const, user: patient };
+  }
+  
+  return { role: 'unknown' as const };
 };
