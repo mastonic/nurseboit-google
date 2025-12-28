@@ -1,32 +1,32 @@
-
 import { Role } from "../types";
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Fix: Use process.env instead of import.meta.env to resolve Property 'env' does not exist on type 'ImportMeta'
-const N8N_BASE_URL = process.env.VITE_N8N_BASE_URL || "";
-const N8N_API_KEY = process.env.VITE_N8N_API_KEY || "";
-
-// Fix: Initialize GoogleGenAI client using process.env.API_KEY as per guidelines
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * Interface de communication avec Gemini API.
- * Remplace l'orchestrateur n8n par des appels directs au SDK Gemini pour une meilleure fiabilité.
  */
 
 export const processUserMessage = async (message: string, role: Role, context: any) => {
   try {
-    // Fix: Use gemini-3-pro-preview for complex reasoning and medical coordination tasks
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: message,
       config: {
-        systemInstruction: `Tu es NurseBot, un assistant intelligent pour un cabinet infirmier. 
-        Rôle de l'utilisateur: ${role}. 
-        Contexte: ${JSON.stringify(context)}.
-        Réponds de manière concise et professionnelle. 
-        Identifie l'intention parmi: CHAT, TRANSMISSION, PLANNING, PRESCRIPTION, BILLING.
-        Retourne uniquement un JSON structuré.`,
+        systemInstruction: `Tu es NurseBot PRO, l'assistant expert pour un cabinet d'infirmiers libéraux (IDEL). 
+        Rôle de l'utilisateur actuel: ${role}. 
+        Contexte patient/planning: ${JSON.stringify(context)}.
+        
+        TES MISSIONS:
+        1. TRANSMISSION: Aide à rédiger des transmissions ciblées (Observations, Vigilance, Actions).
+        2. PLANNING: Aide à organiser les tournées et détecter les conflits.
+        3. FACTURATION: Aide sur la nomenclature NGAP (AMI, AIS, BSI) et les majorations.
+        4. CLINIQUE: Fournit des rappels de protocoles basés sur les bonnes pratiques.
+
+        CONSIGNES:
+        - Réponds de manière très concise, professionnelle et empathique.
+        - Utilise le jargon IDEL approprié (DSI, BSI, tournées, cotations).
+        - Retourne uniquement un JSON structuré avec 'reply' (ton texte), 'intent' (CHAT|TRANSMISSION|PLANNING|BILLING) et 'actionRequired' (boolean).`,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -44,7 +44,7 @@ export const processUserMessage = async (message: string, role: Role, context: a
   } catch (error) {
     console.error("Gemini processUserMessage error:", error);
     return { 
-      reply: "[Mode Démo] Erreur de communication avec l'IA. " + (error as Error).message, 
+      reply: "[Service IA] Une erreur est survenue lors de la communication avec l'assistant.", 
       intent: "CHAT", 
       actionRequired: false 
     };
@@ -53,32 +53,30 @@ export const processUserMessage = async (message: string, role: Role, context: a
 
 export const transcribeVoiceNote = async (base64Audio: string, mimeType: string = "audio/webm") => {
   try {
-    // Fix: Use gemini-2.5-flash-native-audio-preview-09-2025 for high-quality audio transcription
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-native-audio-preview-09-2025',
       contents: {
         parts: [
           { inlineData: { data: base64Audio, mimeType } },
-          { text: "Transcrivez fidèlement ce message audio professionnel de soin infirmier. Ne gardez que le texte utile sans commentaires." }
+          { text: "Transcris fidèlement ce message audio professionnel infirmier. Extrais-en le contenu clinique pur, sans fioritures." }
         ]
       }
     });
     return { transcription: response.text };
   } catch (error) {
     console.error("Gemini transcription error:", error);
-    return { transcription: "[Erreur de transcription IA]" };
+    return { transcription: "[Erreur de transcription vocale]" };
   }
 };
 
 export const analyzePrescriptionOCR = async (base64Image: string) => {
   try {
-    // Fix: Use gemini-3-pro-preview for OCR as gemini-2.5-flash-image does not support responseSchema
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: {
         parts: [
           { inlineData: { data: base64Image, mimeType: 'image/png' } },
-          { text: "Analysez cette ordonnance médicale et extrayez les données structurées suivantes au format JSON." }
+          { text: "Analyse cette ordonnance et extrais les données médicales structurées." }
         ]
       },
       config: {
@@ -86,12 +84,12 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            prescriber: { type: Type.STRING, description: 'Nom du médecin' },
-            rpps: { type: Type.STRING, description: 'Numéro RPPS' },
-            datePrescribed: { type: Type.STRING, description: 'Date de prescription YYYY-MM-DD' },
-            dateExpiry: { type: Type.STRING, description: 'Date de fin de validité YYYY-MM-DD' },
-            careDetails: { type: Type.STRING, description: 'Détails des soins à prodiguer' },
-            patientName: { type: Type.STRING, description: 'Nom complet du patient' }
+            prescriber: { type: Type.STRING },
+            rpps: { type: Type.STRING },
+            datePrescribed: { type: Type.STRING },
+            dateExpiry: { type: Type.STRING },
+            careDetails: { type: Type.STRING },
+            patientName: { type: Type.STRING }
           }
         }
       }
@@ -105,10 +103,9 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
 
 export const transcribeMeeting = async (text: string) => {
   try {
-    // Fix: Use gemini-3-flash-preview for fast summarization and task extraction from text
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Générez un compte-rendu structuré (décisions et tâches) de cette réunion du cabinet infirmier: ${text}`,
+      contents: `Résume cette réunion de cabinet IDEL en décisions et tâches: ${text}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -132,7 +129,7 @@ export const transcribeMeeting = async (text: string) => {
     });
     return JSON.parse(response.text || "{}");
   } catch (error) {
-    console.error("Gemini staff coordination error:", error);
+    console.error("Gemini coordination error:", error);
     return { decisions: [], tasks: [] };
   }
 };

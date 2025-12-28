@@ -1,4 +1,5 @@
-import { Patient, Appointment, Prescription, PreInvoice, UserSession, Transmission, Message } from '../types';
+
+import { Patient, Appointment, Prescription, PreInvoice, UserSession, Transmission, Message, Task, User, Role } from '../types';
 import { MOCK_PATIENTS, MOCK_APPOINTMENTS, MOCK_INVOICES, MOCK_PRESCRIPTIONS, MOCK_NURSES } from '../constants';
 import { createClient } from '@supabase/supabase-js';
 
@@ -17,18 +18,30 @@ const getSupabase = () => {
 const SESSION_KEY = 'nursebot_session';
 const UPDATE_EVENT = 'nursebot-store-update';
 
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  path: string;
+  isRead: boolean;
+  date: string;
+}
+
 let state: any = {
+  dbStatus: 'loading',
   patients: [],
   appointments: [],
   prescriptions: [],
   transmissions: [],
   chatMessages: [],
+  internalMessages: [],
   invoices: [],
   users: [],
   tasks: [],
-  messages: [],
+  messages: [], // WhatsApp history
   alerts: [],
   logs: [],
+  notifications: [],
   settings: {
     cabinetName: 'Cabinet Infirmier Pro',
     workingHoursStart: '06:00',
@@ -38,8 +51,8 @@ let state: any = {
       twilioSid: '',
       twilioToken: '',
       twilioPhone: '',
-      twilioWebhookUrl: '',
-      n8nApiKey: '',
+      twilioWebhookUrl: process.env.VITE_N8N_BASE_URL || '',
+      n8nApiKey: process.env.VITE_N8N_API_KEY || '',
       resendKey: '',
       googleCalendarSync: false
     }
@@ -48,39 +61,52 @@ let state: any = {
 
 export const initStore = async () => {
   const supabase = getSupabase();
+  loadLocalData(); // Load local first for speed
+  
   if (!supabase) {
-    loadLocalData();
+    state.dbStatus = 'local';
     return;
   }
 
   try {
+    const { data: pingData, error: pingError } = await supabase.from('users').select('id').limit(1);
+    if (pingError) throw pingError;
+
     const results = await Promise.all([
       supabase.from('users').select('*'),
       supabase.from('patients').select('*'),
       supabase.from('appointments').select('*'),
       supabase.from('transmissions').select('*').order('timestamp', { ascending: false }),
-      supabase.from('messages').select('*').order('created_at', { ascending: false }),
-      supabase.from('alerts').select('*').order('created_at', { ascending: false }),
-      supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(50)
+      supabase.from('tasks').select('*'),
+      supabase.from('notifications').select('*').order('created_at', { ascending: false })
     ]);
 
-    const [u, p, a, tr, m, al, l] = results;
+    const [u, p, a, tr, t, n] = results;
 
     state = {
       ...state,
-      users: (u.data || []).map((user: any) => ({ id: user.id, firstName: user.first_name, lastName: user.last_name, role: user.role, pin: user.pin, active: user.active })),
+      dbStatus: 'connected',
+      users: (u.data || []).map((user: any) => ({ 
+        id: user.id, 
+        firstName: user.first_name, 
+        lastName: user.last_name, 
+        role: user.role, 
+        pin: user.pin, 
+        active: user.active,
+        phone: user.phone 
+      })),
       patients: (p.data || []).map((pat: any) => ({ ...pat, firstName: pat.first_name, lastName: pat.last_name, careType: pat.care_type, isALD: pat.is_ald })),
-      appointments: (a.data || []).map((apt: any) => ({ id: apt.id, patient_id: apt.patient_id, nurse_id: apt.nurse_id, date_time: apt.date_time, status: apt.status })),
+      appointments: (a.data || []),
       transmissions: (tr.data || []),
-      messages: (m.data || []).map((msg: any) => ({ id: msg.id, patientId: msg.patient_id, direction: msg.direction, text: msg.text, timestamp: msg.created_at, status: msg.status })),
-      alerts: (al.data || []).map((alert: any) => ({ id: alert.id, title: alert.title, message: alert.message, date: alert.created_at, isRead: alert.is_read })),
-      logs: (l.data || []).map((log: any) => ({ id: log.id, action: log.action, user: log.user_id, timestamp: log.created_at }))
+      tasks: (t.data || []),
+      notifications: (n.data || [])
     };
 
     saveOffline();
     window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
   } catch (error) {
-    loadLocalData();
+    console.warn("Supabase connection failed", error);
+    state.dbStatus = 'local';
   }
 };
 
@@ -96,6 +122,7 @@ const loadLocalData = () => {
       appointments: MOCK_APPOINTMENTS,
       prescriptions: MOCK_PRESCRIPTIONS,
       invoices: MOCK_INVOICES,
+      tasks: [],
       transmissions: [
         { id: 't1', patientId: 'demo-1', fromId: 'u2', fromName: 'Bertrand Durand', text: 'OBS: Plaie propre.\nVIGILANCE: RAS.\nACTION: Pansement refait.', category: 'clinique', priority: 'low', status: 'sent', timestamp: new Date().toISOString() }
       ],
@@ -159,36 +186,41 @@ export const logout = () => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const addTransmission = (trans: Transmission) => {
-  state.transmissions = [trans, ...state.transmissions];
-  saveOffline();
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-};
-
+// ACTIONS
 export const markTransmissionReceived = (transId: string, userId: string) => {
-  const trans = state.transmissions.find((t: any) => t.id === transId);
-  if (trans) {
-    trans.status = 'received';
-    trans.readAt = new Date().toISOString();
-    saveOffline();
-    window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+  state.transmissions = state.transmissions.map((t: Transmission) => 
+    t.id === transId ? { ...t, status: 'closed', acknowledgedBy: userId, acknowledgedAt: new Date().toISOString() } : t
+  );
+  saveOffline();
+  addLog(`Transmission ${transId} acquittée par ${userId}`);
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const addTask = (task: Task) => {
+  state.tasks = [task, ...state.tasks];
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const updateTask = (task: Task) => {
+  state.tasks = state.tasks.map((t: Task) => t.id === task.id ? task : t);
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const upsertUser = (user: User) => {
+  const exists = state.users.some((u: User) => u.id === user.id);
+  if (exists) {
+    state.users = state.users.map((u: User) => u.id === user.id ? user : u);
+  } else {
+    state.users = [...state.users, user];
   }
-};
-
-export const updatePatient = (patient: Patient) => {
-  state.patients = state.patients.map((p: any) => p.id === patient.id ? patient : p);
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const updateAppointment = (apt: Appointment) => {
-  state.appointments = state.appointments.map((a: any) => a.id === apt.id ? apt : a);
-  saveOffline();
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-};
-
-export const updateInvoice = (invoice: PreInvoice) => {
-  state.invoices = state.invoices.map((i: any) => i.id === invoice.id ? invoice : i);
+export const addInternalMessage = (msg: any) => {
+  state.internalMessages = [...state.internalMessages, msg];
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
@@ -218,8 +250,32 @@ export const calculateInvoiceTotal = (acts: any[], displacement: any, majoration
   return actsTotal + majorations.reduce((sum, m) => sum + m.amount, 0) + (displacement?.amount || 0);
 };
 
+export const addTransmission = (trans: Transmission) => {
+  state.transmissions = [trans, ...state.transmissions];
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
 export const addPrescription = (presc: Prescription) => {
   state.prescriptions = [presc, ...state.prescriptions];
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const updatePatient = (patient: Patient) => {
+  state.patients = state.patients.map((p: any) => p.id === patient.id ? patient : p);
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const updateAppointment = (apt: Appointment) => {
+  state.appointments = state.appointments.map((a: any) => a.id === apt.id ? apt : a);
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const updateInvoice = (invoice: PreInvoice) => {
+  state.invoices = state.invoices.map((i: any) => i.id === invoice.id ? invoice : i);
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };

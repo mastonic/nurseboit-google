@@ -1,5 +1,5 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-// Removed checkAppointmentConflict which was not exported from store.ts and was unused
 import { getStore, saveStore, addLog, subscribeToStore, updateAppointment, getCurrentSession } from '../services/store';
 import { Appointment, Patient } from '../types';
 
@@ -10,9 +10,6 @@ const PlanningView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'me' | 'cabinet'>(session?.role === 'admin' ? 'cabinet' : 'me');
   const [appointments, setAppointments] = useState(store.appointments);
   const [modalState, setModalState] = useState<{ mode: 'add' | 'edit' | 'view'; data: any } | null>(null);
-  
-  const [patientSearch, setPatientSearch] = useState('');
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   useEffect(() => {
     return subscribeToStore(() => {
@@ -23,13 +20,13 @@ const PlanningView: React.FC = () => {
   }, []);
 
   const currentAppointments = useMemo(() => {
+    const filtered = appointments.filter(a => a.dateTime.startsWith(selectedDate));
     if (viewMode === 'me' && session) {
-      return appointments.filter(a => a.nurseId === session.userId);
+      return filtered.filter(a => a.nurseId === session.userId);
     }
-    return appointments;
-  }, [appointments, viewMode, session]);
+    return filtered;
+  }, [appointments, viewMode, session, selectedDate]);
 
-  // Génération dynamique de la plage horaire basée sur les réglages
   const hours = useMemo(() => {
     const start = parseInt(store.settings.workingHoursStart.split(':')[0]);
     const end = parseInt(store.settings.workingHoursEnd.split(':')[0]);
@@ -83,6 +80,8 @@ const PlanningView: React.FC = () => {
     setModalState(null);
   };
 
+  const getMapsUrl = (address: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -92,18 +91,8 @@ const PlanningView: React.FC = () => {
         </div>
         
         <div className="flex gap-2 p-1 bg-slate-200 rounded-2xl">
-           <button 
-            onClick={() => setViewMode('me')}
-            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'me' ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-500'}`}
-           >
-              Mon Planning
-           </button>
-           <button 
-            onClick={() => setViewMode('cabinet')}
-            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'cabinet' ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-500'}`}
-           >
-              Cabinet
-           </button>
+           <button onClick={() => setViewMode('me')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'me' ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-500'}`}>Mon Planning</button>
+           <button onClick={() => setViewMode('cabinet')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'cabinet' ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-500'}`}>Cabinet</button>
         </div>
       </div>
 
@@ -112,11 +101,7 @@ const PlanningView: React.FC = () => {
           const d = new Date(); d.setDate(d.getDate() + i);
           const iso = d.toISOString().split('T')[0];
           return (
-            <button
-              key={iso}
-              onClick={() => setSelectedDate(iso)}
-              className={`flex flex-col items-center min-w-[75px] p-4 rounded-2xl transition-all ${selectedDate === iso ? 'bg-emerald-500 text-white shadow-lg scale-105' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
-            >
+            <button key={iso} onClick={() => setSelectedDate(iso)} className={`flex flex-col items-center min-w-[75px] p-4 rounded-2xl transition-all ${selectedDate === iso ? 'bg-emerald-500 text-white shadow-lg scale-105' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
               <span className="text-[10px] font-black uppercase tracking-widest">{d.toLocaleDateString('fr-FR', { weekday: 'short' })}</span>
               <span className="text-xl font-black">{d.getDate()}</span>
             </button>
@@ -124,101 +109,96 @@ const PlanningView: React.FC = () => {
         })}
       </div>
 
-      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
-        {viewMode === 'cabinet' ? (
-          <div className="grid grid-cols-[80px_repeat(3,1fr)] border-b border-slate-100 bg-slate-50/50">
-            <div className="p-4 flex items-center justify-center text-[10px] font-black text-slate-400">HEURE</div>
-            {store.users.filter(u => u.role !== 'admin').map(u => (
-               <div key={u.id} className="p-4 text-center border-l border-slate-100">
-                  <p className="text-xs font-black text-slate-900">{u.firstName}</p>
-                  <p className="text-[9px] font-bold text-emerald-500 uppercase">{u.role}</p>
-               </div>
-            ))}
-          </div>
-        ) : null}
-
+      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden min-h-[500px]">
         <div className="max-h-[700px] overflow-y-auto">
-          {hours.map(h => (
-            <div key={h} className={`grid ${viewMode === 'me' ? 'grid-cols-[80px_1fr]' : 'grid-cols-[80px_repeat(3,1fr)]'} border-b border-slate-50 min-h-[80px]`}>
+          {hours.map(h => {
+            const hStr = h.toString().padStart(2, '0');
+            return (
+            <div key={h} className="grid grid-cols-[80px_1fr] border-b border-slate-50 min-h-[80px]">
               <div className="flex items-center justify-center text-xs font-black text-slate-400 border-r border-slate-50 bg-slate-50/20">{h}h00</div>
-              
-              {viewMode === 'me' ? (
-                 <div className="p-2 relative group">
-                    {currentAppointments.find(a => a.dateTime.startsWith(`${selectedDate}T${h.toString().padStart(2, '0')}`)) ? (
-                       (() => {
-                          const apt = currentAppointments.find(a => a.dateTime.startsWith(`${selectedDate}T${h.toString().padStart(2, '0')}`))!;
-                          const p = store.patients.find(pat => pat.id === apt.patientId);
-                          return (
-                            <div onClick={() => setModalState({ mode: 'view', data: apt })} className="bg-emerald-50 border-l-4 border-emerald-500 p-3 rounded-2xl h-full shadow-sm cursor-pointer hover:scale-[1.01] transition-all">
-                               <p className="text-xs font-black text-slate-900">{p?.lastName} {p?.firstName}</p>
-                               <p className="text-[10px] text-slate-500 font-medium truncate">{apt.notes || p?.careType}</p>
-                            </div>
-                          );
-                       })()
-                    ) : (
-                       <button onClick={() => setModalState({ mode: 'add', data: { nurseId: session?.userId, hour: h } })} className="w-full h-full opacity-0 group-hover:opacity-100 flex items-center justify-center text-emerald-300 transition-all">
-                          <i className="fa-solid fa-plus-circle text-2xl"></i>
-                       </button>
-                    )}
-                 </div>
-              ) : (
-                store.users.filter(u => u.role !== 'admin').map(u => (
-                  <div key={u.id} className="p-2 border-l border-slate-50 relative group">
-                    {appointments.find(a => a.nurseId === u.id && a.dateTime.startsWith(`${selectedDate}T${h.toString().padStart(2, '0')}`)) ? (
-                       (() => {
-                          const apt = appointments.find(a => a.nurseId === u.id && a.dateTime.startsWith(`${selectedDate}T${h.toString().padStart(2, '0')}`))!;
-                          const p = store.patients.find(pat => pat.id === apt.patientId);
-                          return (
-                            <div onClick={() => setModalState({ mode: 'view', data: apt })} className="bg-white border border-slate-100 p-2 rounded-xl h-full shadow-sm cursor-pointer hover:border-emerald-200">
-                               <p className="text-[10px] font-black text-slate-700 truncate">{p?.lastName}</p>
-                               <div className="w-full h-1 bg-slate-100 rounded-full mt-1"><div className="h-full bg-emerald-500 rounded-full" style={{width: '60%'}}></div></div>
-                            </div>
-                          );
-                       })()
-                    ) : (
-                       <button 
-                        disabled={session?.role === 'infirmiere'} 
-                        onClick={() => setModalState({ mode: 'add', data: { nurseId: u.id, hour: h } })} 
-                        className="w-full h-full opacity-0 group-hover:opacity-100 flex items-center justify-center text-slate-200"
-                       >
-                          <i className="fa-solid fa-plus-circle text-xl"></i>
-                       </button>
-                    )}
-                  </div>
-                ))
-              )}
+              <div className="p-2 relative group flex flex-wrap gap-2">
+                 {currentAppointments.filter(a => a.dateTime.includes(`T${hStr}:`)).map(apt => {
+                    const p = store.patients.find(pat => pat.id === apt.patientId);
+                    return (
+                      <div key={apt.id} onClick={() => setModalState({ mode: 'view', data: apt })} className="bg-emerald-50 border-l-4 border-emerald-500 p-3 rounded-2xl shadow-sm cursor-pointer hover:scale-[1.01] transition-all min-w-[200px]">
+                         <div className="flex justify-between items-start">
+                           <p className="text-xs font-black text-slate-900">{p?.lastName} {p?.firstName}</p>
+                           <span className="text-[8px] font-black text-emerald-600 bg-white px-1.5 py-0.5 rounded uppercase">{apt.dateTime.split('T')[1].substring(0, 5)}</span>
+                         </div>
+                         <p className="text-[9px] text-slate-500 font-medium truncate mt-1">{apt.notes || p?.careType}</p>
+                      </div>
+                    );
+                 })}
+                 <button onClick={() => setModalState({ mode: 'add', data: { nurseId: session?.userId, hour: h } })} className="w-10 h-10 opacity-0 group-hover:opacity-100 flex items-center justify-center text-emerald-300 border-2 border-dashed border-emerald-100 rounded-xl hover:bg-emerald-50 transition-all">
+                    <i className="fa-solid fa-plus"></i>
+                 </button>
+              </div>
             </div>
-          ))}
+          )})}
         </div>
       </div>
 
       {modalState && (
-         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
-            <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300">
-              <div className="p-8 border-b border-slate-100 flex justify-between items-center">
+         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+            <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 max-h-[90vh] flex flex-col">
+              <div className="p-8 border-b border-slate-100 flex justify-between items-center shrink-0">
                  <h3 className="font-black text-2xl">{modalState.mode === 'add' ? 'Planifier un passage' : 'Détails du passage'}</h3>
                  <button onClick={() => setModalState(null)} className="text-slate-300 hover:text-slate-600 p-2"><i className="fa-solid fa-xmark text-2xl"></i></button>
               </div>
 
+              <div className="p-8 space-y-6 overflow-y-auto">
               {modalState.mode === 'view' ? (
-                <div className="p-8 space-y-6">
-                   <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 bg-emerald-500 text-white rounded-2xl flex items-center justify-center text-2xl font-black">{store.patients.find(p => p.id === modalState.data.patientId)?.lastName[0]}</div>
-                      <div>
-                         <h4 className="font-black text-xl">{store.patients.find(p => p.id === modalState.data.patientId)?.lastName} {store.patients.find(p => p.id === modalState.data.patientId)?.firstName}</h4>
-                         <p className="text-slate-500 text-sm font-bold italic">Passage prévu à {modalState.data.dateTime.split('T')[1].substring(0, 5)}</p>
-                      </div>
-                   </div>
-                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm font-medium">
-                      {modalState.data.notes || "Aucune note consignée."}
-                   </div>
-                   <div className="flex gap-4">
-                      <button onClick={() => setModalState({ mode: 'edit', data: modalState.data })} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest">Modifier</button>
-                      <button onClick={() => setModalState(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Fermer</button>
-                   </div>
-                </div>
+                (() => {
+                  const apt = modalState.data;
+                  const p = store.patients.find(pat => pat.id === apt.patientId);
+                  return (
+                  <div className="space-y-6">
+                     <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-emerald-500 text-white rounded-2xl flex items-center justify-center text-2xl font-black">{p?.lastName[0]}</div>
+                        <div>
+                           <h4 className="font-black text-xl">{p?.lastName} {p?.firstName}</h4>
+                           <p className="text-slate-500 text-sm font-bold italic">Passage prévu à {apt.dateTime.split('T')[1].substring(0, 5)}</p>
+                        </div>
+                     </div>
+                     
+                     <div className="grid grid-cols-1 gap-4">
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4 group">
+                           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-sm">
+                              <i className="fa-solid fa-phone"></i>
+                           </div>
+                           <div className="flex-1">
+                              <p className="text-[10px] font-black text-slate-400 uppercase">Téléphone</p>
+                              <a href={`tel:${p?.phone}`} className="text-sm font-bold text-slate-700 hover:text-emerald-500 transition-all">{p?.phone}</a>
+                           </div>
+                        </div>
+
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4 group">
+                           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500 shadow-sm">
+                              <i className="fa-solid fa-map-location-dot"></i>
+                           </div>
+                           <div className="flex-1">
+                              <p className="text-[10px] font-black text-slate-400 uppercase">Adresse</p>
+                              <p className="text-sm font-bold text-slate-700 truncate">{p?.address}</p>
+                           </div>
+                           <a href={getMapsUrl(p?.address || '')} target="_blank" rel="noopener noreferrer" className="p-3 bg-white text-blue-500 rounded-xl shadow-sm hover:bg-blue-50 transition-all">
+                              <i className="fa-solid fa-directions"></i>
+                           </a>
+                        </div>
+                     </div>
+
+                     <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100 text-sm font-medium text-amber-900 italic">
+                        <p className="text-[10px] font-black uppercase text-amber-500 mb-2">Instructions / Notes</p>
+                        {apt.notes || "Aucune note consignée."}
+                     </div>
+
+                     <div className="flex gap-4">
+                        <button onClick={() => setModalState({ mode: 'edit', data: apt })} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest">Modifier</button>
+                        <button onClick={() => setModalState(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Fermer</button>
+                     </div>
+                  </div>
+                )})()
               ) : (
-                <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
                    <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Patient</label>
                       <select name="patientId" required defaultValue={modalState.data.patientId} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm">
@@ -235,7 +215,7 @@ const PlanningView: React.FC = () => {
                       </div>
                       <div className="space-y-1">
                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Heure</label>
-                         <input name="time" type="time" defaultValue={`${modalState.data.hour.toString().padStart(2, '0')}:00`} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+                         <input name="time" type="time" defaultValue={`${(modalState.data.hour || 8).toString().padStart(2, '0')}:00`} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
                       </div>
                    </div>
                    <div className="space-y-1">
@@ -249,6 +229,7 @@ const PlanningView: React.FC = () => {
                    <button type="submit" className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-200">Valider la planification</button>
                 </form>
               )}
+              </div>
             </div>
          </div>
       )}

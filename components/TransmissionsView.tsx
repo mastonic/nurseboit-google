@@ -13,8 +13,8 @@ const TransmissionsView: React.FC = () => {
   }, []);
 
   const transmissions = store.transmissions.filter((t: Transmission) => {
-    if (filter === 'unread') return t.status === 'sent' && t.fromId !== session?.userId;
-    if (filter === 'urgent') return t.priority === 'high';
+    if (filter === 'unread') return (t.status === 'sent' || t.status === 'received') && t.fromId !== session?.userId;
+    if (filter === 'urgent') return t.priority === 'high' && t.status !== 'closed';
     return true;
   });
 
@@ -23,6 +23,12 @@ const TransmissionsView: React.FC = () => {
     social: 'fa-users text-purple-500',
     logistique: 'fa-truck-ramp-box text-slate-500',
     urgence: 'fa-triangle-exclamation text-rose-500'
+  };
+
+  const handleAcknowledge = (id: string) => {
+    if (session) {
+      markTransmissionReceived(id, session.userId);
+    }
   };
 
   return (
@@ -48,11 +54,12 @@ const TransmissionsView: React.FC = () => {
       <div className="grid grid-cols-1 gap-6">
         {transmissions.length > 0 ? transmissions.map(t => {
            const patient = store.patients.find((p:Patient) => p.id === t.patientId);
+           const isClosed = t.status === 'closed';
            return (
-             <div key={t.id} className={`bg-white p-8 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row gap-8 transition-all hover:shadow-xl ${t.status === 'sent' && t.fromId !== session?.userId ? 'border-l-8 border-l-emerald-500' : 'border-slate-100'}`}>
+             <div key={t.id} className={`bg-white p-8 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row gap-8 transition-all hover:shadow-xl ${!isClosed && t.fromId !== session?.userId ? 'border-l-8 border-l-emerald-500' : 'border-slate-100 opacity-80'}`}>
                 <div className="flex flex-col items-center justify-center bg-slate-50 rounded-[2rem] p-6 w-full md:w-48 shrink-0 text-center">
                    <div className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center text-xl font-black mb-3">
-                      {patient?.lastName[0]}
+                      {patient?.lastName[0] || '?'}
                    </div>
                    <p className="font-black text-slate-900 text-sm truncate w-full">{patient?.lastName} {patient?.firstName}</p>
                    <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1 italic">{patient?.careType}</p>
@@ -61,9 +68,9 @@ const TransmissionsView: React.FC = () => {
                 <div className="flex-1 space-y-4">
                    <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
-                         <i className={`fa-solid ${categoryIcon[t.category]} text-lg`}></i>
+                         <i className={`fa-solid ${categoryIcon[t.category] || 'fa-info-circle text-slate-400'} text-lg`}></i>
                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.category}</span>
-                         {t.priority === 'high' && <span className="bg-rose-100 text-rose-600 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest animate-pulse">Priorité Haute</span>}
+                         {t.priority === 'high' && !isClosed && <span className="bg-rose-100 text-rose-600 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest animate-pulse">Priorité Haute</span>}
                       </div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Émis le {new Date(t.timestamp).toLocaleString()}</p>
                    </div>
@@ -75,17 +82,22 @@ const TransmissionsView: React.FC = () => {
                          </div>
                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">De {t.fromName}</p>
                       </div>
-                      {t.status === 'sent' && t.fromId !== session?.userId ? (
+                      {!isClosed && t.fromId !== session?.userId ? (
                         <button 
-                          onClick={() => markTransmissionReceived(t.id, session?.userId || '')}
-                          className="px-6 py-2.5 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-200"
+                          onClick={() => handleAcknowledge(t.id)}
+                          className="px-6 py-2.5 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-200 hover:scale-105 active:scale-95 transition-all"
                         >
                           Accuser Réception
                         </button>
                       ) : (
-                        <div className="flex items-center gap-2 text-slate-300">
-                           <i className="fa-solid fa-check-double text-[10px]"></i>
-                           <p className="text-[9px] font-black uppercase tracking-widest">Passation Validée</p>
+                        <div className="flex flex-col items-end gap-1 text-slate-400">
+                           <div className="flex items-center gap-2">
+                             <i className="fa-solid fa-check-double text-[10px] text-emerald-500"></i>
+                             <p className="text-[9px] font-black uppercase tracking-widest">Passation Validée</p>
+                           </div>
+                           {t.acknowledgedBy && (
+                             <p className="text-[8px] font-bold italic">Par {store.users.find((u:any) => u.id === t.acknowledgedBy)?.firstName} le {new Date(t.acknowledgedAt || '').toLocaleDateString()}</p>
+                           )}
                         </div>
                       )}
                    </div>

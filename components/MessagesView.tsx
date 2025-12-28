@@ -1,239 +1,176 @@
 
-import React, { useState, useEffect } from 'react';
-import { getStore, saveStore, addLog, subscribeToStore, handleIncomingTwilioMessage } from '../services/store';
-import { processUserMessage } from '../services/geminiService';
+import React, { useState, useEffect, useRef } from 'react';
+import { getStore, saveStore, addLog, subscribeToStore, addInternalMessage, getCurrentSession } from '../services/store';
+import { processUserMessage, transcribeVoiceNote } from '../services/geminiService';
 import { Message, Patient } from '../types';
 
 const MessagesView: React.FC = () => {
+  const session = getCurrentSession();
   const [store, setStore] = useState(getStore());
-  const [messages, setMessages] = useState(store.messages);
+  const [activeTab, setActiveTab] = useState<'team' | 'patients'>('team');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(store.patients[0]?.id || null);
   const [replyText, setReplyText] = useState('');
-  const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
-  const [isSending, setIsSending] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   
-  // Simulator State
-  const [showTwilioLab, setShowTwilioLab] = useState(false);
-  const [simPhone, setSimPhone] = useState('+33612345678');
-  const [simBody, setSimBody] = useState('');
-
-  // Fix: Use process.env instead of import.meta.env to resolve Property 'env' does not exist error
-  const webhookActive = process.env.VITE_N8N_BASE_URL ? true : false;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
-    return subscribeToStore(() => {
-      const latestStore = getStore();
-      setStore(latestStore);
-      setMessages(latestStore.messages);
-    });
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [store.messages, store.internalMessages, activeTab]);
+
+  useEffect(() => {
+    return subscribeToStore(() => setStore(getStore()));
   }, []);
 
-  const patientMessages = messages.filter(m => m.patientId === selectedPatientId);
-  const selectedPatient = store.patients.find(p => p.id === selectedPatientId);
+  const handleSend = async (textToSend?: string, isVoice = false) => {
+    const text = textToSend || replyText;
+    if (!text.trim() || !session) return;
 
-  const runTwilioSimulation = async () => {
-    if (!simBody.trim()) return;
-    const payload = { From: simPhone, Body: simBody };
-    const result = await handleIncomingTwilioMessage(payload);
-    if (result.role === 'patient') {
-      setSelectedPatientId(result.user.id);
-      generateAiSuggestion(simBody, result.user);
-    }
-    setSimBody('');
-    setShowTwilioLab(false);
-  };
-
-  const generateAiSuggestion = async (input: string, patientObj?: Patient) => {
-    setIsGeneratingSuggestion(true);
-    try {
-      const result = await processUserMessage(input, 'patient', { patient: patientObj || selectedPatient });
-      setAiSuggestion(result.reply);
-    } catch (e) {
-      setAiSuggestion("L'IA est momentanément indisponible.");
-    } finally {
-      setIsGeneratingSuggestion(false);
-    }
-  };
-
-  const handleSend = async (textToSend?: string) => {
-    const finalContent = textToSend || replyText;
-    if (!finalContent.trim() || !selectedPatientId || !selectedPatient) return;
-
-    setIsSending(true);
-
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      patientId: selectedPatientId,
-      direction: 'outbound',
-      text: finalContent,
-      timestamp: new Date().toISOString(),
-      status: 'sent'
-    };
-
-    saveStore({ messages: [newMessage, ...messages] });
-
-    if (webhookActive) {
-      try {
-        // Fix: Use process.env instead of import.meta.env to resolve property access error
-        await fetch(`${process.env.VITE_N8N_BASE_URL}/webhook/outbound_message`, {
+    if (activeTab === 'team') {
+      const msg = {
+        id: Date.now().toString(),
+        authorId: session.userId,
+        authorName: session.name,
+        text,
+        timestamp: new Date().toISOString(),
+        type: isVoice ? 'voice' : 'text'
+      };
+      addInternalMessage(msg);
+    } else if (selectedPatientId) {
+      const patient = store.patients.find(p => p.id === selectedPatientId);
+      const msg: Message = {
+        id: Date.now().toString(),
+        patientId: selectedPatientId,
+        direction: 'outbound',
+        text,
+        timestamp: new Date().toISOString(),
+        status: 'sent'
+      };
+      saveStore({ messages: [msg, ...store.messages] });
+      
+      // WhatsApp Webhook n8n
+      const config = store.settings.apiConfig;
+      if (config.twilioWebhookUrl) {
+        fetch(config.twilioWebhookUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-N8N-API-KEY': config.n8nApiKey },
           body: JSON.stringify({
-            to: selectedPatient.phone,
-            body: finalContent,
-            patientId: selectedPatient.id
+            event: 'whatsapp_send',
+            to: patient?.phone,
+            text,
+            patientId: selectedPatientId
           })
-        });
-      } catch (err) {
-        console.error("Webhook error:", err);
+        }).catch(err => console.error("n8n WA send failed", err));
       }
+      addLog(`WhatsApp envoyé à ${patient?.lastName}`);
     }
-
     setReplyText('');
-    setAiSuggestion(null);
-    setIsSending(false);
-    addLog(`WhatsApp envoyé à ${selectedPatient.lastName}`);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      mediaRecorder.ondataavailable = e => audioChunksRef.current.push(e.data);
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64 = (reader.result as string).split(',')[1];
+          setIsTranscribing(true);
+          const res = await transcribeVoiceNote(base64);
+          if (res.transcription) handleSend(res.transcription, true);
+          setIsTranscribing(false);
+        };
+        stream.getTracks().forEach(t => t.stop());
+      };
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (e) { alert("Microphone bloqué."); }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
   };
 
   return (
-    <div className="h-[calc(100vh-160px)] flex flex-col md:flex-row bg-white rounded-[3rem] border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in duration-500">
-      <div className="w-full md:w-96 border-r border-slate-100 flex flex-col bg-slate-50/50">
-        <div className="p-8 border-b border-slate-100 bg-white flex justify-between items-center">
-          <div>
-            <h2 className="font-black text-slate-900 tracking-tight">Messagerie Patient</h2>
-            <p className={`text-[9px] font-black uppercase tracking-widest mt-1 ${webhookActive ? 'text-emerald-500' : 'text-amber-500'}`}>
-              {webhookActive ? '● Webhook n8n Actif' : '○ Mode Simulateur'}
-            </p>
+    <div className="h-[calc(100vh-160px)] flex bg-white rounded-[3rem] border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in">
+      {/* Sidebar Channels */}
+      <div className="w-80 border-r border-slate-100 flex flex-col bg-slate-50/50">
+        <div className="p-8 border-b border-slate-100 bg-white">
+          <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+             <button onClick={() => setActiveTab('team')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'team' ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-400'}`}>Équipe</button>
+             <button onClick={() => setActiveTab('patients')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'patients' ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-400'}`}>Patients</button>
           </div>
-          <button onClick={() => setShowTwilioLab(true)} className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-lg hover:scale-110 transition-all">
-             <i className="fa-solid fa-flask-vial"></i>
-          </button>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {store.patients.map(patient => {
-            const lastMsg = messages.filter(m => m.patientId === patient.id)[0];
-            return (
-              <button 
-                key={patient.id} 
-                onClick={() => setSelectedPatientId(patient.id)}
-                className={`w-full p-6 flex items-center gap-5 transition-all hover:bg-white text-left ${selectedPatientId === patient.id ? 'bg-white shadow-inner border-l-8 border-l-emerald-500' : ''}`}
-              >
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black shrink-0 ${selectedPatientId === patient.id ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-200 text-slate-500'}`}>
-                  {patient.lastName[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline mb-1">
-                    <p className="font-black text-slate-900 truncate text-sm uppercase tracking-tight">{patient.lastName}</p>
-                    <span className="text-[9px] font-black text-slate-400">{lastMsg ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                  </div>
-                  <p className="text-[11px] truncate text-slate-500 font-bold italic leading-none">
-                    {lastMsg ? lastMsg.text : 'Aucun échange.'}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex-1 flex flex-col bg-white">
-        {selectedPatient ? (
-          <>
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white shadow-sm z-10">
-              <div className="flex items-center gap-5">
-                <div className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-xl">
-                   {selectedPatient.lastName[0]}
-                </div>
-                <div>
-                   <p className="font-black text-slate-900 leading-none text-lg tracking-tight uppercase">{selectedPatient.firstName} {selectedPatient.lastName}</p>
-                   <p className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mt-2 flex items-center gap-2">
-                      <i className="fa-brands fa-whatsapp text-sm"></i>
-                      {selectedPatient.phone}
-                   </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex-1 p-10 overflow-y-auto space-y-8 bg-slate-50/30 flex flex-col-reverse">
-               {aiSuggestion && (
-                 <div className="flex justify-start animate-in zoom-in duration-300">
-                    <div className="bg-white border-2 border-emerald-500 p-8 rounded-[3rem] max-w-lg shadow-2xl shadow-emerald-500/5">
-                       <div className="flex items-center gap-3 mb-4">
-                          <div className="w-8 h-8 bg-emerald-500 text-slate-950 rounded-full flex items-center justify-center text-xs">
-                             <i className="fa-solid fa-robot"></i>
-                          </div>
-                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Réponse Suggérée (IA)</p>
-                       </div>
-                       <p className="text-sm font-bold text-slate-800 leading-relaxed italic mb-8">"{aiSuggestion}"</p>
-                       <div className="flex gap-3">
-                          <button onClick={() => handleSend(aiSuggestion)} className="flex-1 py-4 bg-emerald-500 text-slate-950 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-500/20">Confirmer l'envoi</button>
-                          <button onClick={() => setAiSuggestion(null)} className="px-6 py-4 bg-slate-100 text-slate-400 rounded-2xl text-[10px] font-black uppercase">Ignorer</button>
-                       </div>
-                    </div>
-                 </div>
-               )}
-
-               {patientMessages.map(msg => (
-                 <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] p-6 rounded-[2.5rem] shadow-xl ${msg.direction === 'outbound' ? 'bg-slate-900 text-white rounded-br-none' : 'bg-white border border-slate-100 text-slate-800 rounded-bl-none'}`}>
-                       <p className="text-sm font-bold leading-relaxed">{msg.text}</p>
-                       <p className="text-[9px] mt-4 font-black uppercase tracking-widest opacity-30 text-right">
-                          {new Date(msg.timestamp).toLocaleString([], { hour: '2-digit', minute: '2-digit' })}
-                       </p>
-                    </div>
-                 </div>
-               ))}
-            </div>
-
-            <div className="p-10 bg-white border-t border-slate-50">
-               <div className="flex gap-5">
-                  <input 
-                    type="text" 
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    placeholder="Message WhatsApp..." 
-                    className="flex-1 px-8 py-6 bg-slate-50 border-none rounded-[2rem] font-black text-sm outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all shadow-inner"
-                  />
-                  <button onClick={() => handleSend()} disabled={!replyText.trim() || isSending} className="w-16 h-16 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-emerald-500 hover:text-slate-950 transition-all active:scale-95 disabled:opacity-10">
-                     <i className="fa-solid fa-paper-plane text-xl"></i>
-                  </button>
+          {activeTab === 'team' ? (
+            <div className="p-6">
+               <div className="w-full p-4 bg-emerald-500 text-slate-950 rounded-[1.5rem] flex items-center gap-4 shadow-lg shadow-emerald-500/20">
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><i className="fa-solid fa-users"></i></div>
+                  <p className="font-black text-xs uppercase tracking-widest">Général Cabinet</p>
                </div>
             </div>
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-20 text-center opacity-20">
-             <i className="fa-solid fa-comments text-7xl mb-6"></i>
-             <h3 className="text-2xl font-black text-slate-400">Sélectionnez un patient</h3>
-          </div>
-        )}
+          ) : (
+            store.patients.map(p => (
+              <button key={p.id} onClick={() => setSelectedPatientId(p.id)} className={`w-full p-5 flex items-center gap-4 transition-all hover:bg-white text-left ${selectedPatientId === p.id ? 'bg-white border-l-8 border-emerald-500 shadow-inner' : ''}`}>
+                 <div className="w-12 h-12 rounded-2xl bg-slate-200 flex items-center justify-center font-black text-slate-500 shrink-0">{p.lastName[0]}</div>
+                 <div className="min-w-0">
+                    <p className="font-black text-slate-800 text-xs uppercase tracking-tight truncate">{p.lastName} {p.firstName}</p>
+                    <p className="text-[10px] text-slate-400 font-bold truncate">WhatsApp IDEL</p>
+                 </div>
+              </button>
+            ))
+          )}
+        </div>
       </div>
 
-      {showTwilioLab && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
-           <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl p-12 space-y-10 animate-in zoom-in">
-              <div className="flex justify-between items-center">
-                 <h3 className="font-black text-2xl flex items-center gap-3 text-emerald-600">
-                    <i className="fa-solid fa-flask-vial"></i>
-                    Simulateur WhatsApp
-                 </h3>
-                 <button onClick={() => setShowTwilioLab(false)} className="text-slate-300 hover:text-slate-600"><i className="fa-solid fa-xmark text-2xl"></i></button>
-              </div>
-              <div className="space-y-6">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Numéro Patient</label>
-                    <input value={simPhone} onChange={(e) => setSimPhone(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Message Entrant</label>
-                    <textarea value={simBody} onChange={(e) => setSimBody(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm h-32" />
-                 </div>
-                 <button onClick={runTwilioSimulation} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl">Simuler Réception</button>
-              </div>
+      {/* Chat Content */}
+      <div className="flex-1 flex flex-col">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+           <h3 className="font-black text-slate-900 uppercase text-xs tracking-widest">
+              {activeTab === 'team' ? 'Staff : Discussions internes' : `WhatsApp : ${store.patients.find(p=>p.id===selectedPatientId)?.lastName}`}
+           </h3>
+           {activeTab === 'patients' && <i className="fa-brands fa-whatsapp text-emerald-500 text-xl"></i>}
+        </div>
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-10 space-y-6 bg-slate-50/20 flex flex-col">
+          {(activeTab === 'team' ? store.internalMessages : store.messages.filter(m => m.patientId === selectedPatientId).slice().reverse()).map((msg: any) => {
+             const isMe = activeTab === 'team' ? msg.authorId === session?.userId : msg.direction === 'outbound';
+             return (
+               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[70%] p-5 rounded-[2rem] shadow-xl ${isMe ? 'bg-slate-900 text-white rounded-br-none' : 'bg-white border border-slate-100 text-slate-800 rounded-bl-none'}`}>
+                     {activeTab === 'team' && !isMe && <p className="text-[9px] font-black uppercase text-emerald-500 mb-2">{msg.authorName}</p>}
+                     <p className="text-sm font-bold leading-relaxed">{msg.text}</p>
+                     <p className="text-[8px] mt-3 font-black uppercase tracking-widest opacity-30 text-right">{new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                  </div>
+               </div>
+             );
+          })}
+          {isTranscribing && <div className="text-center text-[10px] font-black text-slate-400 animate-pulse uppercase tracking-[0.3em]">Transcription IA en cours...</div>}
+        </div>
+
+        <div className="p-8 bg-white border-t border-slate-100 shrink-0">
+           <div className="flex items-center gap-4">
+              <button onMouseDown={startRecording} onMouseUp={stopRecording} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse' : 'bg-slate-100 text-slate-400 hover:text-emerald-500'}`}>
+                 <i className="fa-solid fa-microphone text-xl"></i>
+              </button>
+              <input value={replyText} onChange={e => setReplyText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="Écrire un message..." className="flex-1 bg-slate-50 border-none rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all shadow-inner" />
+              <button onClick={() => handleSend()} disabled={!replyText.trim()} className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-xl shadow-slate-900/10 hover:bg-emerald-500 transition-all disabled:opacity-20">
+                 <i className="fa-solid fa-paper-plane"></i>
+              </button>
            </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

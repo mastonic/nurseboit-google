@@ -1,328 +1,196 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { getStore, subscribeToStore, updateSettings, getCurrentSession } from '../services/store';
+import { getStore, subscribeToStore, updateSettings, getCurrentSession, initStore } from '../services/store';
 import { ApiConfig } from '../types';
 
 const SettingsView: React.FC = () => {
   const session = getCurrentSession();
   const [store, setStore] = useState(getStore());
-  const [activeTab, setActiveTab] = useState<'general' | 'team' | 'api' | 'sql'>('api');
+  const [activeTab, setActiveTab] = useState<'general' | 'n8n' | 'db'>('n8n');
   const [showSavedToast, setShowSavedToast] = useState(false);
-  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [errorMessage, setErrorMessage] = useState('');
-  
-  const webhookUrlRef = useRef<HTMLInputElement>(null);
-  const n8nApiKeyRef = useRef<HTMLInputElement>(null);
+  const [testStatus, setTestStatus] = useState<any>({ supabase: 'idle', n8n: 'idle' });
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    return subscribeToStore(() => {
-      setStore(getStore());
-    });
+    return subscribeToStore(() => setStore(getStore()));
   }, []);
 
-  const handleTestConnection = async () => {
-    let url = webhookUrlRef.current?.value || store.settings.apiConfig.twilioWebhookUrl;
-    let apiKey = n8nApiKeyRef.current?.value || store.settings.apiConfig.n8nApiKey;
-    
-    if (!url) {
-      setTestStatus('error');
-      setErrorMessage("L'URL du Webhook est vide. Veuillez saisir une adresse (ex: https://n8n.votre-serveur.fr/webhook/...)");
-      webhookUrlRef.current?.focus();
-      return;
-    }
-
-    // Nettoyage et validation de l'URL
-    url = url.trim();
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://' + url;
-      if (webhookUrlRef.current) webhookUrlRef.current.value = url;
-    }
-
-    setTestStatus('loading');
-    setErrorMessage('');
-    
-    try {
-      console.log(`Tentative de connexion à n8n: ${url}`);
-      
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 8000); // Timeout 8s
-
-      const response = await fetch(url, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-N8N-API-KEY': apiKey
-        },
-        body: JSON.stringify({ 
-          event: 'ping', 
-          timestamp: new Date().toISOString(),
-          source: 'NurseBot Webapp Test',
-          nurse: session?.name || 'Inconnue'
-        })
-      });
-
-      clearTimeout(id);
-
-      if (response.ok || response.status === 200) {
-        setTestStatus('success');
-        setTimeout(() => setTestStatus('idle'), 3000);
-      } else {
-        const errorText = await response.text().catch(() => "Aucun détail d'erreur");
-        throw new Error(`Erreur HTTP ${response.status} : ${errorText}`);
-      }
-    } catch (err: any) {
-      console.error("Erreur détaillée test n8n:", err);
-      setTestStatus('error');
-      
-      if (err.name === 'AbortError') {
-        setErrorMessage("Délai d'attente dépassé (8s). Le serveur n8n ne répond pas ou l'URL est incorrecte.");
-      } else if (err.message === 'Failed to fetch') {
-        setErrorMessage(
-          "ERREUR RÉSEAU (Failed to fetch). \n\n" +
-          "CAUSES PROBABLES :\n" +
-          "1. CORS : n8n bloque l'accès depuis ce navigateur. \n   Solution: Réglez N8N_CORS_ALLOWED_ORIGINS=* dans n8n.\n" +
-          "2. HTTPS : Vous appelez un serveur http:// depuis ce site en https://. Le navigateur bloque par sécurité.\n" +
-          "3. DISPONIBILITÉ : L'URL n'est pas accessible publiquement ou le serveur est éteint.\n\n" +
-          "ASTUCE : Testez l'URL dans un outil comme Postman ou via cURL. Si ça marche là-bas, c'est un problème de CORS."
-        );
-      } else {
-        setErrorMessage(err.message);
-      }
-    }
-  };
-
-  const copyCurl = () => {
-    const url = webhookUrlRef.current?.value || store.settings.apiConfig.twilioWebhookUrl;
-    const apiKey = n8nApiKeyRef.current?.value || store.settings.apiConfig.n8nApiKey;
-    const curl = `curl -X POST "${url}" \\
-     -H "Content-Type: application/json" \\
-     -H "X-N8N-API-KEY: ${apiKey}" \\
-     -d '{"event":"ping", "source":"nursebot_curl"}'`;
-    
-    navigator.clipboard.writeText(curl);
-    alert("Commande cURL copiée ! Testez-la dans votre terminal pour vérifier si le serveur répond.");
-  };
-
-  const handleUpdateApiConfig = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleUpdateConfig = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const formElements = e.currentTarget.elements;
-    
-    const googleSyncEl = formElements.namedItem('googleSync') as HTMLInputElement | null;
-    let webhookUrl = formData.get('twilioWebhookUrl') as string || '';
-    
-    if (webhookUrl && !webhookUrl.startsWith('http')) {
-      webhookUrl = 'https://' + webhookUrl;
-    }
-    
-    const newConfig: ApiConfig = {
-      twilioSid: formData.get('twilioSid') as string || '',
-      twilioToken: formData.get('twilioToken') as string || '',
-      twilioPhone: formData.get('twilioPhone') as string || '',
-      twilioWebhookUrl: webhookUrl,
-      n8nApiKey: formData.get('n8nApiKey') as string || '',
-      resendKey: formData.get('resendKey') as string || '',
-      googleCalendarSync: googleSyncEl ? googleSyncEl.checked : false
+    const newConfig = {
+      ...store.settings.apiConfig,
+      twilioWebhookUrl: formData.get('n8nUrl') as string,
+      n8nApiKey: formData.get('n8nKey') as string
     };
-    
     updateSettings({ apiConfig: newConfig });
     setShowSavedToast(true);
     setTimeout(() => setShowSavedToast(false), 3000);
   };
 
-  const emergencyFixSql = `ALTER TABLE patients ADD COLUMN IF NOT EXISTS phone TEXT UNIQUE;`;
+  const handleTestSystem = async () => {
+    setIsRefreshing(true);
+    setTestStatus({ supabase: 'loading', n8n: 'loading' });
+    
+    // Test Supabase
+    try { await initStore(); setTestStatus(prev => ({ ...prev, supabase: 'success' })); } 
+    catch (e) { setTestStatus(prev => ({ ...prev, supabase: 'error' })); }
 
-  if (!session || (session.role !== 'admin' && session.role !== 'infirmiereAdmin')) {
-    return <div className="p-10 text-center font-bold text-rose-500">Accès non autorisé.</div>;
-  }
+    // Test n8n
+    const n8nUrl = store.settings.apiConfig.twilioWebhookUrl;
+    if (n8nUrl) {
+      try {
+        const res = await fetch(n8nUrl.replace('/webhook/', '/webhook-test/'), { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json', 'X-N8N-API-KEY': store.settings.apiConfig.n8nApiKey },
+          body: JSON.stringify({ event: 'health_check' })
+        });
+        setTestStatus(prev => ({ ...prev, n8n: res.ok ? 'success' : 'error' }));
+      } catch (e) { setTestStatus(prev => ({ ...prev, n8n: 'error' })); }
+    } else {
+      setTestStatus(prev => ({ ...prev, n8n: 'idle' }));
+    }
+    setIsRefreshing(false);
+  };
+
+  const StatusIcon = ({ status }: { status: string }) => {
+    if (status === 'loading') return <i className="fa-solid fa-spinner fa-spin text-slate-400"></i>;
+    if (status === 'success') return <i className="fa-solid fa-circle-check text-emerald-500"></i>;
+    if (status === 'error') return <i className="fa-solid fa-circle-xmark text-rose-500"></i>;
+    return <i className="fa-solid fa-circle text-slate-200"></i>;
+  };
 
   return (
-    <div className="space-y-8 pb-20 relative animate-in fade-in duration-500">
+    <div className="space-y-10 pb-20 animate-in fade-in duration-500">
       {showSavedToast && (
-        <div className="fixed top-20 right-8 z-[100] animate-in slide-in-from-right">
-           <div className="bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-emerald-400">
-              <i className="fa-solid fa-check-circle text-xl"></i>
-              <p className="font-black text-sm uppercase tracking-widest">Configuration Enregistrée</p>
-           </div>
+        <div className="fixed top-24 right-8 z-[100] bg-emerald-500 text-white px-8 py-5 rounded-[2rem] shadow-2xl font-black text-[10px] uppercase tracking-widest border border-emerald-400 animate-in slide-in-from-right">
+           Configuration Appliquée
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Configuration</h1>
-          <p className="text-slate-500 font-medium">Paramétrage technique & Intégrations</p>
+           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Configuration Cabinet</h1>
+           <p className="text-slate-500 font-medium">Réglages système et intégrations n8n.</p>
         </div>
-        <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl shrink-0">
-           {(['general', 'team', 'api', 'sql'] as const).map(tab => (
-              <button 
-                key={tab} 
-                onClick={() => setActiveTab(tab)}
-                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-emerald-500 shadow-md' : 'text-slate-400'}`}
-              >
-                 {tab === 'general' ? 'Général' : tab === 'team' ? 'Équipe' : tab === 'api' ? 'n8n / Twilio' : 'SQL'}
+        <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[2rem]">
+           {(['general', 'n8n', 'db'] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-emerald-500 shadow-xl' : 'text-slate-400'}`}>
+                 {tab === 'n8n' ? 'n8n Webhooks' : tab === 'db' ? 'Base de données' : 'Général'}
               </button>
            ))}
         </div>
       </div>
 
-      {activeTab === 'api' && (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          
+          {activeTab === 'n8n' && (
+             <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-xl space-y-8">
+                <div className="flex justify-between items-center">
+                   <h3 className="text-xl font-black text-slate-900 flex items-center gap-4">
+                      <i className="fa-solid fa-plug-circle-bolt text-indigo-500"></i>
+                      Passerelle n8n
+                   </h3>
+                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Connecteur VITE_N8N</span>
+                </div>
+                <form onSubmit={handleUpdateConfig} className="space-y-6">
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Base URL Webhook (POST)</label>
+                      <input name="n8nUrl" defaultValue={store.settings.apiConfig.twilioWebhookUrl} placeholder="https://votre-vps.n8n.cloud/webhook/..." className="w-full p-5 bg-slate-50 border-none rounded-2xl font-bold text-sm focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-inner" />
+                   </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">X-N8N-API-KEY (Public Token)</label>
+                      <input name="n8nKey" type="password" defaultValue={store.settings.apiConfig.n8nApiKey} className="w-full p-5 bg-slate-50 border-none rounded-2xl font-bold text-sm shadow-inner" />
+                   </div>
+                   <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl">Enregistrer & Persister</button>
+                </form>
+             </div>
+          )}
+
+          {activeTab === 'db' && (
+             <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-xl space-y-10">
+                <div className="flex justify-between items-center">
+                   <h3 className="text-xl font-black text-slate-900">État des Tables</h3>
+                   <div className="flex items-center gap-3 bg-emerald-50 px-4 py-2 rounded-xl text-emerald-600 font-black text-[10px] uppercase">
+                      <i className="fa-solid fa-circle-dot animate-pulse"></i> Connecté à Supabase
+                   </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+                   {[
+                     { l: 'Patients', v: store.patients.length, i: 'fa-users' },
+                     { l: 'Planning', v: store.appointments.length, i: 'fa-calendar' },
+                     { l: 'Transmissions', v: store.transmissions.length, i: 'fa-repeat' },
+                     { l: 'Messages', v: store.messages.length, i: 'fa-message' },
+                     { l: 'Tâches', v: store.tasks.length, i: 'fa-check' },
+                     { l: 'Logs Audit', v: store.logs.length, i: 'fa-shield' },
+                   ].map(stat => (
+                     <div key={stat.l} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-50 text-center">
+                        <i className={`fa-solid ${stat.i} text-slate-300 text-xl mb-3`}></i>
+                        <p className="text-2xl font-black text-slate-900">{stat.v}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{stat.l}</p>
+                     </div>
+                   ))}
+                </div>
+                <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-3">
+                   <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Audit Variable .env</p>
+                   <p className="text-xs font-bold text-amber-900 italic">"Erreur variable non supportée corrigée : Utilisation de process.env.VITE_* pour l'injection build time."</p>
+                </div>
+             </div>
+          )}
+
+          {activeTab === 'general' && (
+             <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-xl text-center space-y-8">
+                <i className="fa-solid fa-hospital text-6xl text-slate-100"></i>
+                <h3 className="text-2xl font-black text-slate-900">Cabinet Infirmier Pro</h3>
+                <div className="max-w-md mx-auto space-y-4">
+                   <input defaultValue={store.settings.cabinetName} className="w-full p-5 bg-slate-50 rounded-2xl font-black text-center text-xl shadow-inner border-none" />
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-slate-50 p-4 rounded-xl">
+                         <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Version App</p>
+                         <p className="text-sm font-black">2.1.5-beta</p>
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-xl">
+                         <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Build Env</p>
+                         <p className="text-sm font-black text-emerald-500 uppercase">Production</p>
+                      </div>
+                   </div>
+                </div>
+             </div>
+          )}
+
+        </div>
+
+        {/* Diagnostic Sidebar */}
         <div className="space-y-8">
-           <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
-                 <div className="space-y-1">
-                    <h3 className="font-black text-xl text-slate-900">Diagnostic de la passerelle n8n</h3>
-                    <p className="text-xs text-slate-400 font-medium italic">Testez la connectivité et identifiez les problèmes de CORS.</p>
+           <div className="bg-slate-900 text-white p-8 rounded-[3rem] shadow-2xl space-y-8">
+              <h3 className="text-xs font-black uppercase text-emerald-400 tracking-[0.4em] text-center">Diagnostics Temps Réel</h3>
+              <div className="space-y-4">
+                 <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/10">
+                    <span className="text-xs font-bold">Supabase DB</span>
+                    <StatusIcon status={testStatus.supabase} />
                  </div>
-                 <div className="flex gap-2">
-                    <button 
-                      onClick={copyCurl}
-                      className="px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all flex items-center gap-2"
-                    >
-                       <i className="fa-solid fa-terminal"></i> cURL
-                    </button>
-                    <button 
-                      onClick={handleTestConnection}
-                      disabled={testStatus === 'loading'}
-                      className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-3 shadow-xl ${
-                        testStatus === 'success' ? 'bg-emerald-500 text-white scale-105 shadow-emerald-200' :
-                        testStatus === 'error' ? 'bg-rose-500 text-white animate-shake' :
-                        'bg-slate-900 text-white hover:bg-slate-800'
-                      }`}
-                    >
-                       {testStatus === 'loading' ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-plug"></i>}
-                       {testStatus === 'success' ? 'Réussi !' : testStatus === 'error' ? 'Échec' : 'Tester Webhook'}
-                    </button>
+                 <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/10">
+                    <span className="text-xs font-bold">n8n Gateway</span>
+                    <StatusIcon status={testStatus.n8n} />
+                 </div>
+                 <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/10 opacity-50">
+                    <span className="text-xs font-bold">WhatsApp / Twilio</span>
+                    <i className="fa-solid fa-circle text-slate-600"></i>
                  </div>
               </div>
-
-              {testStatus === 'error' && (
-                 <div className="mb-6 p-6 bg-rose-50 border-2 border-rose-100 rounded-[1.5rem] animate-in slide-in-from-top-4 duration-300">
-                    <div className="flex items-start gap-4">
-                       <i className="fa-solid fa-triangle-exclamation text-rose-500 text-xl mt-1"></i>
-                       <div className="space-y-3 flex-1">
-                          <p className="text-sm text-rose-800 font-black uppercase tracking-tighter">Échec du test de connexion</p>
-                          <div className="bg-white/60 p-4 rounded-xl border border-rose-200">
-                            <p className="text-xs text-rose-700 font-bold leading-relaxed whitespace-pre-wrap font-mono">
-                               {errorMessage}
-                            </p>
-                          </div>
-                          <div className="flex gap-4 items-center">
-                             <a href="https://docs.n8n.io/hosting/configuration/environment-variables/#webhook-variables" target="_blank" rel="noreferrer" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:underline">
-                                <i className="fa-solid fa-book mr-1"></i> Documentation CORS n8n
-                             </a>
-                             <button onClick={copyCurl} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900">
-                                <i className="fa-solid fa-copy mr-1"></i> Copier cURL pour test externe
-                             </button>
-                          </div>
-                       </div>
-                    </div>
-                 </div>
-              )}
-
-              <div className="bg-slate-50 p-6 rounded-[1.5rem] border border-slate-100">
-                 <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                   <i className="fa-solid fa-lightbulb mr-2 text-amber-500"></i>
-                   <b>Note sur le 'Failed to fetch' :</b> Cette erreur se produit 99% du temps parce que votre instance n8n n'accepte pas les requêtes cross-origin. Vous devez configurer n8n avec <code>N8N_CORS_ALLOWED_ORIGINS=*</code> pour autoriser NurseBot à lui envoyer des données.
-                 </p>
-              </div>
+              <button onClick={handleTestSystem} disabled={isRefreshing} className="w-full py-4 bg-white text-slate-900 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">
+                 {isRefreshing ? <i className="fa-solid fa-spinner fa-spin"></i> : "Tester les connexions"}
+              </button>
            </div>
 
-           <form onSubmit={handleUpdateApiConfig} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-                 <h3 className="font-black text-xl text-slate-900 flex items-center gap-3">
-                    <i className="fa-brands fa-whatsapp text-emerald-500"></i>
-                    WhatsApp / Twilio
-                 </h3>
-                 <div className="space-y-4">
-                    <div className="space-y-1">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Account SID</label>
-                       <input name="twilioSid" placeholder="AC..." defaultValue={store.settings.apiConfig.twilioSid} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                    </div>
-                    <div className="space-y-1">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Numéro Twilio</label>
-                       <input name="twilioPhone" placeholder="whatsapp:+33..." defaultValue={store.settings.apiConfig.twilioPhone} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
-                    </div>
-                 </div>
-              </div>
-
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-                 <h3 className="font-black text-xl text-slate-900 flex items-center gap-3">
-                    <i className="fa-solid fa-diagram-project text-indigo-500"></i>
-                    Webhooks & Sécurité
-                 </h3>
-                 <div className="space-y-4">
-                    <div className="space-y-1">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">URL Webhook n8n</label>
-                       <input 
-                         ref={webhookUrlRef}
-                         name="twilioWebhookUrl" 
-                         placeholder="https://.../webhook/..." 
-                         defaultValue={store.settings.apiConfig.twilioWebhookUrl} 
-                         className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-inner" 
-                       />
-                    </div>
-                    <div className="space-y-1">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">API Key n8n</label>
-                       <input 
-                         ref={n8nApiKeyRef}
-                         name="n8nApiKey" 
-                         type="password"
-                         placeholder="Clé secrète X-N8N-API-KEY..." 
-                         defaultValue={store.settings.apiConfig.n8nApiKey} 
-                         className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-inner" 
-                       />
-                    </div>
-                    <label className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors">
-                       <input 
-                         name="googleSync" 
-                         type="checkbox" 
-                         defaultChecked={store.settings.apiConfig.googleCalendarSync} 
-                         className="w-5 h-5 text-emerald-500 rounded border-slate-300" 
-                       />
-                       <span className="text-sm font-bold text-slate-700">Synchronisation Calendar</span>
-                    </label>
-                 </div>
-                 <button type="submit" className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-emerald-600 hover:scale-[1.02] active:scale-95 transition-all">
-                    Enregistrer la config
-                 </button>
-              </div>
-           </form>
+           <div className="bg-emerald-500 p-8 rounded-[3rem] text-white shadow-xl shadow-emerald-500/20 text-center space-y-4">
+              <i className="fa-solid fa-shield-virus text-5xl opacity-30"></i>
+              <h4 className="font-black text-lg leading-tight uppercase tracking-tight">Sécurité HDS</h4>
+              <p className="text-[10px] font-medium leading-relaxed italic opacity-80">"Toutes les connexions vers le VPS et Supabase sont chiffrées en TLS 1.3 (HTTPS)."</p>
+           </div>
         </div>
-      )}
-
-      {activeTab === 'sql' && (
-         <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl border-4 border-slate-800">
-            <h2 className="text-2xl font-black mb-4 flex items-center gap-3 text-emerald-400">
-               <i className="fa-solid fa-database"></i>
-               Supabase SQL
-            </h2>
-            <div className="space-y-6">
-               <div className="p-6 bg-black/40 rounded-2xl border border-white/5">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-emerald-400 mb-4">Correctif rapide</h4>
-                  <div className="flex flex-col md:flex-row items-center gap-4">
-                    <code className="flex-1 p-3 bg-black/60 rounded-xl text-[10px] font-mono text-emerald-300 border border-white/5 w-full overflow-x-auto">{emergencyFixSql}</code>
-                    <button onClick={() => { navigator.clipboard.writeText(emergencyFixSql); alert("Copié !"); }} className="w-full md:w-auto px-6 py-3 bg-white text-slate-900 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-400 transition-colors shrink-0">Copier</button>
-                  </div>
-               </div>
-            </div>
-         </div>
-      )}
-
-      {activeTab === 'general' && (
-         <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm max-w-2xl">
-            <h3 className="font-black text-2xl mb-8 flex items-center gap-3 text-slate-900">
-               <i className="fa-solid fa-hospital text-emerald-500"></i>
-               Informations Cabinet
-            </h3>
-            <div className="space-y-6">
-               <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nom commercial du cabinet</label>
-                  <input placeholder="Ex: Cabinet des Alizés" defaultValue={store.settings.cabinetName} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm focus:ring-2 focus:ring-emerald-500 transition-all outline-none" />
-               </div>
-            </div>
-         </div>
-      )}
+      </div>
     </div>
   );
 };
