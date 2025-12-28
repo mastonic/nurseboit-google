@@ -5,11 +5,12 @@
     "camera",
     "microphone"
   ],
-  "version": "2.0.0",
-  "author": "Architect Agent",
-  "requirements": {
-    "node": ">=18.0.0",
-    "vps": "n8n installed",
-    "api": "Gemini (via n8n)"
+  "version": "2.1.0",
+  "author": "Senior Product Architect",
+  "deployment": {
+    "platform": "VPS",
+    "server": "Nginx",
+    "runtime": "Node.js 20+",
+    "ssl": "Certbot / Let's Encrypt"
   }
 }

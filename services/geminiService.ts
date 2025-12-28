@@ -72,9 +72,9 @@ export const transcribeVoiceNote = async (base64Audio: string, mimeType: string 
 
 export const analyzePrescriptionOCR = async (base64Image: string) => {
   try {
-    // Fix: Use gemini-2.5-flash-image for reliable document OCR and analysis
+    // Fix: Use gemini-3-pro-preview for OCR as gemini-2.5-flash-image does not support responseSchema
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3-pro-preview',
       contents: {
         parts: [
           { inlineData: { data: base64Image, mimeType: 'image/png' } },

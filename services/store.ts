@@ -1,9 +1,7 @@
-
 import { Patient, Appointment, Prescription, PreInvoice, User, Task, Message, Alert, UserSession, Transmission, ChatMessage } from '../types';
 import { MOCK_PATIENTS, MOCK_APPOINTMENTS, MOCK_INVOICES, MOCK_PRESCRIPTIONS, MOCK_NURSES } from '../constants';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { createClient } from '@supabase/supabase-js';
 
-// Fix: Use process.env instead of import.meta.env to resolve Property 'env' does not exist on type 'ImportMeta'
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 
