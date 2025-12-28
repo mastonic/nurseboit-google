@@ -18,7 +18,6 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       assetsDir: 'assets',
       emptyOutDir: true,
-      // On force Esbuild explicitement pour éviter que Vite ne cherche Terser
       minify: 'esbuild',
       sourcemap: false,
       rollupOptions: {
@@ -26,10 +25,6 @@ export default defineConfig(({ mode }) => {
           main: './index.html',
         },
       },
-    },
-    esbuild: {
-      drop: mode === 'production' ? ['console', 'debugger'] : [],
-      legalComments: 'none',
     },
   };
 });

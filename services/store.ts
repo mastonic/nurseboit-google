@@ -54,7 +54,7 @@ export const initStore = async () => {
   }
 
   try {
-    const queries = [
+    const results = await Promise.all([
       supabase.from('users').select('*'),
       supabase.from('patients').select('*'),
       supabase.from('appointments').select('*'),
@@ -62,20 +62,19 @@ export const initStore = async () => {
       supabase.from('messages').select('*').order('created_at', { ascending: false }),
       supabase.from('alerts').select('*').order('created_at', { ascending: false }),
       supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(50)
-    ];
+    ]);
 
-    const results = await Promise.all(queries);
     const [u, p, a, tr, m, al, l] = results;
 
     state = {
       ...state,
-      users: (u.data || []).map(u => ({ id: u.id, firstName: u.first_name, lastName: u.last_name, role: u.role, pin: u.pin, active: u.active })),
-      patients: (p.data || []).map(p => ({ ...p, firstName: p.first_name, lastName: p.last_name, careType: p.care_type, isALD: p.is_ald })),
-      appointments: (a.data || []).map(a => ({ id: a.id, patientId: a.patient_id, nurseId: a.nurse_id, dateTime: a.date_time, status: a.status })),
+      users: (u.data || []).map((user: any) => ({ id: user.id, firstName: user.first_name, lastName: user.last_name, role: user.role, pin: user.pin, active: user.active })),
+      patients: (p.data || []).map((pat: any) => ({ ...pat, firstName: pat.first_name, lastName: pat.last_name, careType: pat.care_type, isALD: pat.is_ald })),
+      appointments: (a.data || []).map((apt: any) => ({ id: apt.id, patientId: apt.patient_id, nurseId: apt.nurse_id, dateTime: apt.date_time, status: apt.status })),
       transmissions: (tr.data || []),
-      messages: (m.data || []).map(m => ({ id: m.id, patientId: m.patient_id, direction: m.direction, text: m.text, timestamp: m.created_at, status: m.status })),
-      alerts: (al.data || []).map(al => ({ id: al.id, title: al.title, message: al.message, date: al.created_at, isRead: al.is_read })),
-      logs: (l.data || []).map(l => ({ id: l.id, action: l.action, user: l.user_id, timestamp: l.created_at }))
+      messages: (m.data || []).map((msg: any) => ({ id: msg.id, patientId: msg.patient_id, direction: msg.direction, text: msg.text, timestamp: msg.created_at, status: msg.status })),
+      alerts: (al.data || []).map((alert: any) => ({ id: alert.id, title: alert.title, message: alert.message, date: alert.created_at, isRead: alert.is_read })),
+      logs: (l.data || []).map((log: any) => ({ id: log.id, action: log.action, user: log.user_id, timestamp: log.created_at }))
     };
 
     saveOffline();
