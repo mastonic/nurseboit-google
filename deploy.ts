@@ -3,8 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * NurseBot PRO - Script de Déploiement VPS Automatisé
- * Optimisé pour la gestion des permissions Nginx (403 Forbidden Fix)
+ * NurseBot PRO - Script de Déploiement VPS (Compatible Traefik)
  */
 
 const CONFIG = {
@@ -21,24 +20,24 @@ const error = (msg: string) => {
 };
 
 async function run() {
-  console.log('\n🚀 --- NurseBot PRO : Déploiement via Git --- 🚀\n');
+  console.log('\n🚀 --- NurseBot PRO : Déploiement pour Traefik --- 🚀\n');
 
   try {
     // 1. Mise à jour via Git
-    log(`Mise à jour du code source (branche ${CONFIG.branch})...`, '🌿');
+    log(`Mise à jour du code source depuis ${CONFIG.branch}...`, '🌿');
     try {
       execSync('git fetch origin', { stdio: 'inherit' });
       execSync(`git reset --hard origin/${CONFIG.branch}`, { stdio: 'inherit' });
     } catch (e) {
-      log('Git update échoué, poursuite avec les fichiers locaux...', '⚠️');
+      log('Git update impossible, utilisation des fichiers locaux...', '⚠️');
     }
 
     // 2. Installation des dépendances
-    log('Vérification des dépendances (npm install)...', '📦');
+    log('Installation des dépendances...', '📦');
     execSync('npm install', { stdio: 'inherit' });
 
-    // 3. Compilation
-    log('Build de l\'application Vite...', '🏗️');
+    // 3. Build de l'application
+    log('Build de l\'application statique...', '🏗️');
     if (fs.existsSync('dist')) {
       fs.rmSync('dist', { recursive: true, force: true });
     }
@@ -49,37 +48,31 @@ async function run() {
 
     const distPath = path.resolve('dist');
     if (!fs.existsSync(path.join(distPath, 'index.html'))) {
-      error("Le build a échoué : index.html introuvable dans le dossier dist.");
+      error("Build invalide : index.html absent.");
     }
 
-    // 4. Gestion des Backups
+    // 4. Sauvegarde (Backup)
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const backupPath = `${CONFIG.backupPrefix}${timestamp}`;
 
     if (fs.existsSync(CONFIG.webRoot)) {
-      log(`Sauvegarde vers ${backupPath}...`, '🗂️');
-      execSync(`cp -r ${CONFIG.webRoot} ${backupPath}`);
-      execSync(`rm -rf ${CONFIG.webRoot}/*`);
+      log(`Backup de l'ancienne version...`, '🗂️');
+      execSync(`sudo cp -r ${CONFIG.webRoot} ${backupPath}`);
+      execSync(`sudo rm -rf ${CONFIG.webRoot}/*`);
     } else {
       execSync(`sudo mkdir -p ${CONFIG.webRoot}`);
     }
 
-    // 5. Déploiement et Fix des Permissions (Correction de la 403)
-    log(`Copie des fichiers vers ${CONFIG.webRoot}...`, '🚚');
+    // 5. Déploiement
+    log(`Déploiement des fichiers vers ${CONFIG.webRoot}...`, '🚚');
     execSync(`sudo cp -r ${distPath}/* ${CONFIG.webRoot}/`);
 
-    log(`Correction des permissions pour Nginx...`, '🔐');
-    // On s'assure que Nginx peut lire les fichiers et parcourir les dossiers
-    try {
-      execSync(`sudo chown -R www-data:www-data ${CONFIG.webRoot}`);
-      execSync(`sudo find ${CONFIG.webRoot} -type d -exec chmod 755 {} +`);
-      execSync(`sudo find ${CONFIG.webRoot} -type f -exec chmod 644 {} +`);
-    } catch (e) {
-      log('Permissions corrigées via chmod alternatif...', '⚠️');
-      execSync(`sudo chmod -R 755 ${CONFIG.webRoot}`);
-    }
+    // 6. Fix Permissions Universel (Crucial pour éviter la 403)
+    log(`Application des permissions universelles (chmod 755)...`, '🔐');
+    // On rend les dossiers traversables et les fichiers lisibles par tous les services (Traefik/Docker/etc)
+    execSync(`sudo chmod -R 755 ${CONFIG.webRoot}`);
 
-    // 6. Nettoyage des anciens backups
+    // 7. Nettoyage des vieux backups
     const parentDir = path.dirname(CONFIG.webRoot);
     const backups = fs.readdirSync(parentDir)
       .filter(f => f.startsWith('nursebot_backup_'))
@@ -92,16 +85,8 @@ async function run() {
       });
     }
 
-    // 7. Recharger Nginx
-    try {
-      execSync('sudo systemctl reload nginx', { stdio: 'ignore' });
-      log('Nginx rechargé.', '🔄');
-    } catch (e) {
-      log('Nginx reload manuel peut être requis.', '⚠️');
-    }
-
-    log('DÉPLOIEMENT TERMINÉ AVEC SUCCÈS !', '✅');
-    console.log(`\n🌐 URL : https://nursebot.srv1146904.hstgr.cloud\n`);
+    log('DÉPLOIEMENT TERMINÉ !', '✅');
+    console.log(`\n🌐 L'application est prête à être servie par Traefik.\n`);
 
   } catch (err: any) {
     error(err.message);
