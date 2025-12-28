@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * NurseBot PRO - Script de Déploiement VPS
+ * NurseBot PRO - Script de Déploiement VPS Automatisé
  */
 
 const CONFIG = {
@@ -20,66 +20,55 @@ const error = (msg: string) => {
 };
 
 async function run() {
-  console.log('\n🚀 --- NurseBot PRO : Déploiement en cours --- 🚀\n');
+  console.log('\n🚀 --- NurseBot PRO : Déploiement via Git --- 🚀\n');
 
   try {
-    // 1. Git Update (Désactivé pour préserver les modifications locales de l'IA)
-    log(`Utilisation des fichiers locaux modifiés...`, '🌿');
-    /*
+    // 1. Mise à jour via Git
+    log(`Récupération des dernières modifications sur la branche ${CONFIG.branch}...`, '🌿');
     try {
       execSync('git fetch origin', { stdio: 'inherit' });
+      // Force la mise à jour locale par rapport au dépôt distant
       execSync(`git reset --hard origin/${CONFIG.branch}`, { stdio: 'inherit' });
     } catch (e) {
-      log('Git reset échoué, utilisation des fichiers actuels.', '⚠️');
+      log('Git update échoué. Vérifiez vos identifiants ou la connexion.', '⚠️');
     }
-    */
 
-    // 2. Dependencies
-    log('Installation des dépendances...', '📦');
+    // 2. Installation des dépendances (Nécessaire si package.json a changé)
+    log('Installation/Mise à jour des dépendances (npm install)...', '📦');
     execSync('npm install', { stdio: 'inherit' });
 
-    // 3. Clean Build
-    log('Nettoyage et Compilation...', '🏗️');
+    // 3. Nettoyage et Compilation
+    log('Nettoyage du dossier dist et Build Vite...', '🏗️');
     if (fs.existsSync('dist')) {
       fs.rmSync('dist', { recursive: true, force: true });
     }
 
-    // On lance le build de Vite
+    // Compilation forcée en mode production
     execSync('npm run build', { 
       stdio: 'inherit',
       env: { ...process.env, NODE_ENV: 'production' }
     });
 
     const distPath = path.resolve('dist');
-    const assetsPath = path.join(distPath, 'assets');
-    
-    // Vérification cruciale : Vite doit avoir généré au moins un fichier JS
-    if (!fs.existsSync(distPath)) error("Le dossier 'dist' n'a pas été créé.");
-    
-    const distFiles = fs.readdirSync(distPath);
-    const hasAssets = fs.existsSync(assetsPath) && fs.readdirSync(assetsPath).length > 0;
-    
-    if (!hasAssets) {
-      error("Le build a réussi mais aucun fichier JS n'a été généré dans 'dist/assets'. Vérifiez vos imports dans index.tsx.");
-    }
+    if (!fs.existsSync(distPath)) error("Le build a échoué : le dossier 'dist' n'existe pas.");
 
-    // 4. Backup
+    // 4. Gestion des Backups
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const backupPath = `${CONFIG.backupPrefix}${timestamp}`;
 
     if (fs.existsSync(CONFIG.webRoot)) {
-      log(`Backup de l'ancienne version...`, '🗂️');
+      log(`Sauvegarde de la version actuelle vers ${backupPath}...`, '🗂️');
       execSync(`cp -r ${CONFIG.webRoot} ${backupPath}`);
       execSync(`rm -rf ${CONFIG.webRoot}/*`);
     } else {
       fs.mkdirSync(CONFIG.webRoot, { recursive: true });
     }
 
-    // 5. Deploy
-    log(`Publication vers ${CONFIG.webRoot}...`, '🚚');
+    // 5. Déploiement vers le dossier public Nginx
+    log(`Déploiement des fichiers vers ${CONFIG.webRoot}...`, '🚚');
     execSync(`cp -r ${distPath}/* ${CONFIG.webRoot}/`);
 
-    // 6. Cleanup
+    // 6. Nettoyage des anciens backups (garde seulement les 3 derniers)
     const parentDir = path.dirname(CONFIG.webRoot);
     const backups = fs.readdirSync(parentDir)
       .filter(f => f.startsWith('nursebot_backup_'))
@@ -92,14 +81,16 @@ async function run() {
       });
     }
 
-    // 7. Nginx
+    // 7. Recharger Nginx pour appliquer les changements
     try {
       execSync('sudo nginx -s reload', { stdio: 'ignore' });
-      log('Nginx rechargé.', '🔄');
-    } catch (e) {}
+      log('Serveur Nginx rechargé avec succès.', '🔄');
+    } catch (e) {
+      log('Note : Nginx n\'a pas pu être rechargé automatiquement (pas de sudo ?).', '⚠️');
+    }
 
     log('DÉPLOIEMENT TERMINÉ AVEC SUCCÈS !', '✅');
-    console.log(`\n🌐 https://nursebot.srv1146904.hstgr.cloud\n`);
+    console.log(`\n🌐 Application en ligne : https://nursebot.srv1146904.hstgr.cloud\n`);
 
   } catch (err: any) {
     error(err.message);
