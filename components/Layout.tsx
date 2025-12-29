@@ -6,7 +6,7 @@ import { getStore, getCurrentSession, logout } from '../services/store';
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const session = getCurrentSession();
-  const { alerts, messages, transmissions, settings, dbStatus } = getStore();
+  const { alerts, messages, transmissions, settings, dbStatus, dbError } = getStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const unreadAlerts = alerts.filter(a => !a.isRead && (!a.userId || a.userId === session?.userId)).length;
@@ -119,11 +119,23 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-slate-500">
               <i className="fa-solid fa-bars-staggered text-xl"></i>
             </button>
-            <div className="flex items-center gap-4">
-              <div className={`w-2 h-2 rounded-full ${dbStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></div>
+            <div className="flex items-center gap-4 group cursor-help relative">
+              <div className={`w-2 h-2 rounded-full ${dbStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : dbStatus === 'loading' ? 'bg-slate-300 animate-pulse' : 'bg-amber-500'}`}></div>
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {dbStatus === 'connected' ? 'Cloud Synchronisé' : 'Mode Hors-ligne'}
+                {dbStatus === 'connected' ? 'Cloud Synchronisé' : dbStatus === 'loading' ? 'Connexion...' : 'Mode Hors-ligne'}
               </span>
+              
+              {/* Tooltip detail */}
+              <div className="absolute top-full left-0 mt-2 w-64 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
+                 <p className="text-[10px] font-black uppercase text-emerald-500 mb-1">Diagnostic Temps Réel</p>
+                 <p className="text-[11px] font-medium leading-relaxed">
+                   {dbStatus === 'connected' 
+                     ? "Base Supabase connectée. Vos données sont persistées sur le serveur Cloud en temps réel." 
+                     : dbStatus === 'error' 
+                       ? `Erreur : ${dbError || "Impossible de joindre le serveur SQL."}`
+                       : "Données stockées uniquement sur cet appareil."}
+                 </p>
+              </div>
             </div>
           </div>
 

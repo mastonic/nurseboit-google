@@ -15,6 +15,10 @@ const root = ReactDOM.createRoot(rootElement);
 const startApp = async () => {
   console.log(`🚀 NurseBot PRO - Démarrage du système`);
   console.log(`📦 Build: ${process.env.VITE_BUILD_DATE || 'Développement'}`);
+  
+  // Vérification de sécurité (logs non sensibles)
+  const hasSupabase = !!process.env.VITE_SUPABASE_URL;
+  console.log(`🔗 Supabase Config: ${hasSupabase ? 'DÉTECTÉE' : 'MANQUANTE'}`);
 
   try {
     await initStore();

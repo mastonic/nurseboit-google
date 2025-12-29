@@ -54,9 +54,15 @@ const MessagesView: React.FC = () => {
       // WhatsApp Webhook n8n
       const config = store.settings.apiConfig;
       if (config.twilioWebhookUrl) {
+        // Nettoyage pour éviter l'erreur ISO-8859-1 (String non-standard)
+        const cleanKey = (config.n8nApiKey || "").replace(/[^\x00-\xFF]/g, "").trim();
+
         fetch(config.twilioWebhookUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-N8N-API-KEY': config.n8nApiKey },
+          headers: { 
+            'Content-Type': 'application/json', 
+            'X-N8N-API-KEY': cleanKey 
+          },
           body: JSON.stringify({
             event: 'whatsapp_send',
             to: patient?.phone,

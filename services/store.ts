@@ -3,11 +3,12 @@ import { Patient, Appointment, Prescription, PreInvoice, UserSession, Transmissi
 import { MOCK_PATIENTS, MOCK_APPOINTMENTS, MOCK_INVOICES, MOCK_PRESCRIPTIONS, MOCK_NURSES } from '../constants';
 import { createClient } from '@supabase/supabase-js';
 
+// Récupération des variables injectées par Vite
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 
 const getSupabase = () => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR_')) return null;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL === '' || SUPABASE_URL.includes('YOUR_')) return null;
   try {
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   } catch (e) {
@@ -18,17 +19,24 @@ const getSupabase = () => {
 const SESSION_KEY = 'nursebot_session';
 const UPDATE_EVENT = 'nursebot-store-update';
 
-export interface AppNotification {
-  id: string;
-  title: string;
-  message: string;
-  path: string;
-  isRead: boolean;
-  date: string;
+export interface DBHealth {
+  config: boolean;
+  network: boolean;
+  auth: boolean;
+  tables: boolean;
+  lastSync: string | null;
 }
 
 let state: any = {
   dbStatus: 'loading',
+  dbError: null,
+  dbHealth: {
+    config: false,
+    network: false,
+    auth: false,
+    tables: false,
+    lastSync: null
+  } as DBHealth,
   patients: [],
   appointments: [],
   prescriptions: [],
@@ -38,7 +46,7 @@ let state: any = {
   invoices: [],
   users: [],
   tasks: [],
-  messages: [], // WhatsApp history
+  messages: [], 
   alerts: [],
   logs: [],
   notifications: [],
@@ -61,18 +69,43 @@ let state: any = {
 
 export const initStore = async () => {
   const supabase = getSupabase();
-  loadLocalData(); // Load local first for speed
+  loadLocalData(); 
+  
+  // 1. Check Config
+  const hasUrl = !!SUPABASE_URL && SUPABASE_URL !== '';
+  const hasKey = !!SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== '';
+  state.dbHealth.config = hasUrl && hasKey && !SUPABASE_URL.includes('YOUR_');
   
   if (!supabase) {
     state.dbStatus = 'local';
+    if (!hasUrl || !hasKey) {
+      state.dbError = "Configuration absente : Vérifiez le fichier .env sur le VPS et relancez un build.";
+    } else {
+      state.dbError = "Format d'URL ou de clé invalide.";
+    }
+    window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
     return;
   }
 
   try {
+    state.dbStatus = 'loading';
+    
+    // 2. Check Network & Auth (Ping)
     const { data: pingData, error: pingError } = await supabase.from('users').select('id').limit(1);
-    if (pingError) throw pingError;
+    
+    if (pingError) {
+      state.dbHealth.network = false;
+      state.dbHealth.auth = false;
+      state.dbStatus = 'error';
+      state.dbError = `Erreur Supabase: ${pingError.message}`;
+      throw pingError;
+    }
 
-    const results = await Promise.all([
+    state.dbHealth.network = true;
+    state.dbHealth.auth = true;
+
+    // 3. Check Tables Accessibility
+    const results = await Promise.allSettled([
       supabase.from('users').select('*'),
       supabase.from('patients').select('*'),
       supabase.from('appointments').select('*'),
@@ -81,32 +114,40 @@ export const initStore = async () => {
       supabase.from('notifications').select('*').order('created_at', { ascending: false })
     ]);
 
-    const [u, p, a, tr, t, n] = results;
+    const allResolved = results.every(r => r.status === 'fulfilled');
+    state.dbHealth.tables = allResolved;
+
+    // Mapping des données
+    const getData = (index: number) => {
+      const res = results[index];
+      return res.status === 'fulfilled' ? (res as any).value.data || [] : [];
+    };
 
     state = {
       ...state,
       dbStatus: 'connected',
-      users: (u.data || []).map((user: any) => ({ 
-        id: user.id, 
-        firstName: user.first_name, 
-        lastName: user.last_name, 
-        role: user.role, 
-        pin: user.pin, 
-        active: user.active,
-        phone: user.phone 
+      dbError: null,
+      dbHealth: { ...state.dbHealth, lastSync: new Date().toISOString() },
+      users: getData(0).map((user: any) => ({ 
+        id: user.id, firstName: user.first_name, lastName: user.last_name, 
+        role: user.role, pin: user.pin, active: user.active, phone: user.phone 
       })),
-      patients: (p.data || []).map((pat: any) => ({ ...pat, firstName: pat.first_name, lastName: pat.last_name, careType: pat.care_type, isALD: pat.is_ald })),
-      appointments: (a.data || []),
-      transmissions: (tr.data || []),
-      tasks: (t.data || []),
-      notifications: (n.data || [])
+      patients: getData(1).map((pat: any) => ({ 
+        ...pat, firstName: pat.first_name, lastName: pat.last_name, 
+        careType: pat.care_type, isALD: pat.is_ald 
+      })),
+      appointments: getData(2),
+      transmissions: getData(3),
+      tasks: getData(4),
+      notifications: getData(5)
     };
 
     saveOffline();
     window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-  } catch (error) {
-    console.warn("Supabase connection failed", error);
-    state.dbStatus = 'local';
+  } catch (error: any) {
+    state.dbStatus = 'error';
+    state.dbError = error.message || "Erreur réseau Supabase";
+    window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
   }
 };
 
