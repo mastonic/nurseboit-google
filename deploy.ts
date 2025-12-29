@@ -4,8 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * NurseBot PRO - Script de Déploiement "Smart Docker" (Version 2.2)
- * Résout l'erreur "Read-only file system" et "Vite not found".
+ * NurseBot PRO - Script de Déploiement "Smart Docker" (Version 2.3)
+ * Intègre une vérification pré-vol des variables d'environnement.
  */
 
 const CONFIG = {
@@ -17,36 +17,43 @@ const CONFIG = {
 
 const log = (msg: string, emoji = 'ℹ️') => console.log(`${emoji} ${msg}`);
 const error = (msg: string) => {
-  console.error(`❌ ERREUR : ${msg}`);
+  console.error(`\n❌ ERREUR CRITIQUE : ${msg}\n`);
   process.exit(1);
 };
 
 async function run() {
-  console.log('\n🚀 --- NurseBot PRO : Déploiement Intelligent v2.2 --- 🚀\n');
+  console.log('\n🚀 --- NurseBot PRO : Déploiement Intelligent v2.3 --- 🚀\n');
 
   try {
+    // 0. Vérification du fichier .env (Indispensable pour Vite)
+    log(`Vérification du fichier de configuration .env...`, '🔍');
+    const envPath = path.resolve('.env');
+    if (!fs.existsSync(envPath)) {
+      error(`Le fichier .env est INTROUVABLE dans ${process.cwd()}. 
+      Vite a besoin de ce fichier à la racine du projet pour injecter les clés Supabase.
+      Si votre fichier est à la racine du VPS, déplacez-le ici : ${process.cwd()}/.env`);
+    } else {
+      const envContent = fs.readFileSync(envPath, 'utf8');
+      if (!envContent.includes('VITE_SUPABASE_URL')) {
+        error("Le fichier .env existe mais ne contient pas la variable VITE_SUPABASE_URL.");
+      }
+      log(`Fichier .env détecté et valide.`, '✅');
+    }
+
     // 1. Mise à jour Git
     log(`Sync branche ${CONFIG.branch}...`, '🌿');
     try {
       execSync(`git fetch origin && git reset --hard origin/${CONFIG.branch}`, { stdio: 'inherit' });
     } catch (e) {
-      log('Git reset ignoré, utilisation des fichiers locaux.', '⚠️');
+      log('Git reset ignoré ou échoué, utilisation des fichiers actuels.', '⚠️');
     }
 
     // 2. Installation des dépendances
-    // IMPORTANT : On ne définit PAS NODE_ENV=production ici, sinon npm ignore Vite (devDep)
-    log('Installation des dépendances (incluant devDeps pour le build)...', '📦');
+    log('Installation des dépendances...', '📦');
     execSync('npm install', { stdio: 'inherit' });
 
-    // Vérification de sécurité pour Vite
-    if (!fs.existsSync('./node_modules/.bin/vite')) {
-      log('Vite non trouvé dans node_modules, tentative d\'installation forcée...', '⚠️');
-      execSync('npm install vite @vitejs/plugin-react --save-dev', { stdio: 'inherit' });
-    }
-
-    // 3. Build local
+    // 3. Build local avec injection
     log('Génération du build production (Vite)...', '🏗️');
-    // On utilise npx pour être certain de trouver le binaire localement
     execSync('npx vite build', { 
       stdio: 'inherit',
       env: { ...process.env, NODE_ENV: 'production' }
@@ -57,7 +64,7 @@ async function run() {
       error("Le build a échoué : index.html absent du dossier 'dist'.");
     }
     
-    // 4. Identification du point de montage (Host Path)
+    // 4. Déploiement vers Docker
     log(`Analyse du conteneur [${CONFIG.containerName}]...`, '🔍');
     let hostPath = '';
     try {
@@ -67,40 +74,27 @@ async function run() {
       
       if (htmlMount && htmlMount.Source) {
         hostPath = htmlMount.Source;
-        log(`Point de montage trouvé sur l'hôte : ${hostPath}`, '📂');
       }
-    } catch (e) {
-      log('Détection auto du volume impossible via Docker Inspect.', '⚠️');
-    }
+    } catch (e) {}
 
-    // 5. Déploiement
     if (hostPath) {
       log(`Copie des fichiers vers l'hôte [${hostPath}]...`, '🚀');
-      // On utilise sudo car les volumes Docker appartiennent souvent à root
       execSync(`sudo rm -rf ${hostPath}/*`);
       execSync(`sudo cp -rf ${distPath}/* ${hostPath}/`);
-      log(`Permissions : chown 33:33 (www-data)...`, '🔐');
       execSync(`sudo chown -R 33:33 ${hostPath}`); 
     } else {
-      log(`Tentative de copie directe via Docker CP (Mode secours)...`, '📤');
-      try {
-        execSync(`docker cp ${distPath}/. ${CONFIG.containerName}:${CONFIG.containerTarget}/`);
-        execSync(`docker exec ${CONFIG.containerName} chown -R 33:33 ${CONFIG.containerTarget}`);
-      } catch (e: any) {
-        error(`Système de fichiers en lecture seule détecté et aucun volume trouvé. Impossible de déployer.`);
-      }
+      log(`Mode secours : Docker CP...`, '📤');
+      execSync(`docker cp ${distPath}/. ${CONFIG.containerName}:${CONFIG.containerTarget}/`);
+      execSync(`docker exec ${CONFIG.containerName} chown -R 33:33 ${CONFIG.containerTarget}`);
     }
 
-    // 6. Rechargement Nginx
-    log('Rechargement Nginx dans le conteneur...', '🔄');
+    // 5. Rechargement Nginx
     try {
       execSync(`docker exec ${CONFIG.containerName} nginx -s reload`);
-    } catch (e) {
-      log('Nginx reload non supporté par ce conteneur.', '⚠️');
-    }
+    } catch (e) {}
 
     log('DÉPLOIEMENT RÉUSSI !', '✅');
-    console.log(`\n✨ NurseBot est maintenant à jour.`);
+    console.log(`\n✨ NurseBot est synchronisé avec vos variables d'environnement.`);
 
   } catch (err: any) {
     error(err.message);
