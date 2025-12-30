@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getStore, saveStore, addLog, subscribeToStore, addInternalMessage, getCurrentSession } from '../services/store';
-import { processUserMessage, transcribeVoiceNote } from '../services/geminiService';
-import { Message, Patient } from '../types';
+import { getStore, saveStore, addLog, subscribeToStore, addInternalMessage, getCurrentSession, addTransmission } from '../services/store';
+import { transcribeVoiceNote } from '../services/geminiService';
+import { Message, Patient, Transmission } from '../types';
 
 const MessagesView: React.FC = () => {
   const session = getCurrentSession();
@@ -16,6 +16,8 @@ const MessagesView: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+
+  const isRealWhatsApp = !!store.settings.apiConfig.twilioWebhookUrl;
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -51,29 +53,35 @@ const MessagesView: React.FC = () => {
       };
       saveStore({ messages: [msg, ...store.messages] });
       
-      // WhatsApp Webhook n8n
-      const config = store.settings.apiConfig;
-      if (config.twilioWebhookUrl) {
-        // Nettoyage pour éviter l'erreur ISO-8859-1 (String non-standard)
-        const cleanKey = (config.n8nApiKey || "").replace(/[^\x00-\xFF]/g, "").trim();
-
-        fetch(config.twilioWebhookUrl, {
+      if (isRealWhatsApp) {
+        fetch(store.settings.apiConfig.twilioWebhookUrl, {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json', 
-            'X-N8N-API-KEY': cleanKey 
-          },
-          body: JSON.stringify({
-            event: 'whatsapp_send',
-            to: patient?.phone,
-            text,
-            patientId: selectedPatientId
-          })
-        }).catch(err => console.error("n8n WA send failed", err));
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: patient?.phone, text, patientId: selectedPatientId })
+        }).catch(err => console.error("n8n WA error", err));
       }
       addLog(`WhatsApp envoyé à ${patient?.lastName}`);
     }
     setReplyText('');
+  };
+
+  const transformToTransmission = (msg: any) => {
+    if (!session || !selectedPatientId) return;
+    const patient = store.patients.find(p => p.id === selectedPatientId);
+    const newTrans: Transmission = {
+      id: `t-chat-${Date.now()}`,
+      patientId: selectedPatientId,
+      fromId: session.userId,
+      fromName: session.name,
+      text: msg.text,
+      category: 'clinique',
+      priority: 'medium',
+      status: 'sent',
+      timestamp: new Date().toISOString()
+    };
+    addTransmission(newTrans);
+    addLog(`Note chat convertie en transmission pour ${patient?.lastName}`);
+    alert("Message converti en transmission !");
   };
 
   const startRecording = async () => {
@@ -101,16 +109,10 @@ const MessagesView: React.FC = () => {
     } catch (e) { alert("Microphone bloqué."); }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
+  const stopRecording = () => { if (mediaRecorderRef.current) { mediaRecorderRef.current.stop(); setIsRecording(false); } };
 
   return (
     <div className="h-[calc(100vh-160px)] flex bg-white rounded-[3rem] border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in">
-      {/* Sidebar Channels */}
       <div className="w-80 border-r border-slate-100 flex flex-col bg-slate-50/50">
         <div className="p-8 border-b border-slate-100 bg-white">
           <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
@@ -120,18 +122,13 @@ const MessagesView: React.FC = () => {
         </div>
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'team' ? (
-            <div className="p-6">
-               <div className="w-full p-4 bg-emerald-500 text-slate-950 rounded-[1.5rem] flex items-center gap-4 shadow-lg shadow-emerald-500/20">
-                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><i className="fa-solid fa-users"></i></div>
-                  <p className="font-black text-xs uppercase tracking-widest">Général Cabinet</p>
-               </div>
-            </div>
+            <div className="p-6"><div className="w-full p-4 bg-slate-900 text-white rounded-[1.5rem] flex items-center gap-4 shadow-lg shadow-slate-900/10"><i className="fa-solid fa-users"></i><p className="font-black text-xs uppercase tracking-widest">Cabinet PRO</p></div></div>
           ) : (
             store.patients.map(p => (
-              <button key={p.id} onClick={() => setSelectedPatientId(p.id)} className={`w-full p-5 flex items-center gap-4 transition-all hover:bg-white text-left ${selectedPatientId === p.id ? 'bg-white border-l-8 border-emerald-500 shadow-inner' : ''}`}>
+              <button key={p.id} onClick={() => setSelectedPatientId(p.id)} className={`w-full p-5 flex items-center gap-4 transition-all hover:bg-white ${selectedPatientId === p.id ? 'bg-white border-l-8 border-emerald-500 shadow-inner' : ''}`}>
                  <div className="w-12 h-12 rounded-2xl bg-slate-200 flex items-center justify-center font-black text-slate-500 shrink-0">{p.lastName[0]}</div>
                  <div className="min-w-0">
-                    <p className="font-black text-slate-800 text-xs uppercase tracking-tight truncate">{p.lastName} {p.firstName}</p>
+                    <p className="font-black text-slate-800 text-xs uppercase truncate">{p.lastName} {p.firstName}</p>
                     <p className="text-[10px] text-slate-400 font-bold truncate">WhatsApp IDEL</p>
                  </div>
               </button>
@@ -140,12 +137,18 @@ const MessagesView: React.FC = () => {
         </div>
       </div>
 
-      {/* Chat Content */}
       <div className="flex-1 flex flex-col">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
-           <h3 className="font-black text-slate-900 uppercase text-xs tracking-widest">
-              {activeTab === 'team' ? 'Staff : Discussions internes' : `WhatsApp : ${store.patients.find(p=>p.id===selectedPatientId)?.lastName}`}
-           </h3>
+           <div className="flex items-center gap-4">
+              <h3 className="font-black text-slate-900 uppercase text-xs tracking-widest">
+                {activeTab === 'team' ? 'Staff interne' : `Canal ${store.patients.find(p=>p.id===selectedPatientId)?.lastName}`}
+              </h3>
+              {activeTab === 'patients' && (
+                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${isRealWhatsApp ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                   {isRealWhatsApp ? 'WhatsApp Réel' : 'Simulateur'}
+                </span>
+              )}
+           </div>
            {activeTab === 'patients' && <i className="fa-brands fa-whatsapp text-emerald-500 text-xl"></i>}
         </div>
 
@@ -153,16 +156,22 @@ const MessagesView: React.FC = () => {
           {(activeTab === 'team' ? store.internalMessages : store.messages.filter(m => m.patientId === selectedPatientId).slice().reverse()).map((msg: any) => {
              const isMe = activeTab === 'team' ? msg.authorId === session?.userId : msg.direction === 'outbound';
              return (
-               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[70%] p-5 rounded-[2rem] shadow-xl ${isMe ? 'bg-slate-900 text-white rounded-br-none' : 'bg-white border border-slate-100 text-slate-800 rounded-bl-none'}`}>
-                     {activeTab === 'team' && !isMe && <p className="text-[9px] font-black uppercase text-emerald-500 mb-2">{msg.authorName}</p>}
+               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group`}>
+                  <div className={`max-w-[70%] p-5 rounded-[2rem] shadow-xl relative ${isMe ? 'bg-slate-900 text-white rounded-br-none' : 'bg-white border border-slate-100 text-slate-800 rounded-bl-none'}`}>
+                     {!isMe && <p className="text-[9px] font-black uppercase text-emerald-500 mb-2">{msg.authorName || 'Patient'}</p>}
                      <p className="text-sm font-bold leading-relaxed">{msg.text}</p>
-                     <p className="text-[8px] mt-3 font-black uppercase tracking-widest opacity-30 text-right">{new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                     <div className="flex items-center justify-between mt-3">
+                        <p className="text-[8px] font-black uppercase tracking-widest opacity-30">{new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                        {!isMe && activeTab === 'patients' && (
+                          <button onClick={() => transformToTransmission(msg)} className="text-[8px] font-black uppercase text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity ml-4">
+                             Transformer en Transmission
+                          </button>
+                        )}
+                     </div>
                   </div>
                </div>
              );
           })}
-          {isTranscribing && <div className="text-center text-[10px] font-black text-slate-400 animate-pulse uppercase tracking-[0.3em]">Transcription IA en cours...</div>}
         </div>
 
         <div className="p-8 bg-white border-t border-slate-100 shrink-0">
@@ -170,10 +179,8 @@ const MessagesView: React.FC = () => {
               <button onMouseDown={startRecording} onMouseUp={stopRecording} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse' : 'bg-slate-100 text-slate-400 hover:text-emerald-500'}`}>
                  <i className="fa-solid fa-microphone text-xl"></i>
               </button>
-              <input value={replyText} onChange={e => setReplyText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="Écrire un message..." className="flex-1 bg-slate-50 border-none rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all shadow-inner" />
-              <button onClick={() => handleSend()} disabled={!replyText.trim()} className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-xl shadow-slate-900/10 hover:bg-emerald-500 transition-all disabled:opacity-20">
-                 <i className="fa-solid fa-paper-plane"></i>
-              </button>
+              <input value={replyText} onChange={e => setReplyText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="Écrire..." className="flex-1 bg-slate-50 border-none rounded-2xl px-6 py-4 font-bold text-sm outline-none shadow-inner" />
+              <button onClick={() => handleSend()} disabled={!replyText.trim()} className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-xl hover:bg-emerald-500 disabled:opacity-20"><i className="fa-solid fa-paper-plane"></i></button>
            </div>
         </div>
       </div>

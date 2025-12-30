@@ -1,59 +1,123 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { getStore, saveStore, addLog, subscribeToStore, updateAppointment, getCurrentSession } from '../services/store';
-import { Appointment, Patient } from '../types';
+import { getStore, saveStore, addLog, subscribeToStore, updateAppointment, getCurrentSession, setExternalEvents } from '../services/store';
+import { callNurseBotAgent } from '../services/n8nService';
+import { Appointment, Patient, User } from '../types';
 
 const PlanningView: React.FC = () => {
   const session = getCurrentSession();
   const [store, setStore] = useState(getStore());
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [viewMode, setViewMode] = useState<'me' | 'cabinet'>(session?.role === 'admin' ? 'cabinet' : 'me');
-  const [appointments, setAppointments] = useState(store.appointments);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [modalState, setModalState] = useState<{ mode: 'add' | 'edit' | 'view'; data: any } | null>(null);
 
   useEffect(() => {
-    return subscribeToStore(() => {
-      const latestStore = getStore();
-      setStore(latestStore);
-      setAppointments(latestStore.appointments);
-    });
+    return subscribeToStore(() => setStore(getStore()));
   }, []);
 
-  const currentAppointments = useMemo(() => {
-    const filtered = appointments.filter(a => a.dateTime.startsWith(selectedDate));
-    if (viewMode === 'me' && session) {
-      return filtered.filter(a => a.nurseId === session.userId);
+  // Fetch Google Calendar events on date or viewMode change if enabled AND configured
+  useEffect(() => {
+    const hasN8nConfig = !!(store.settings.apiConfig.n8nBaseUrl || process.env.VITE_N8N_BASE_URL);
+    if (store.settings.apiConfig.googleCalendarSync && hasN8nConfig) {
+      handleGoogleSync();
     }
-    return filtered;
-  }, [appointments, viewMode, session, selectedDate]);
+  }, [selectedDate, viewMode, store.settings.apiConfig.googleCalendarSync, store.settings.apiConfig.n8nBaseUrl]);
+
+  const handleGoogleSync = async () => {
+    if (!session) return;
+    
+    const n8nUrl = store.settings.apiConfig.n8nBaseUrl || process.env.VITE_N8N_BASE_URL;
+    if (!n8nUrl) return;
+
+    setIsSyncing(true);
+    try {
+      // Determine which calendars to sync
+      const targetUsers = viewMode === 'me' 
+        ? store.users.filter((u: User) => u.id === session.userId)
+        : store.users.filter((u: User) => u.active && u.calendarId);
+
+      if (targetUsers.length === 0) {
+        setIsSyncing(false);
+        return;
+      }
+
+      const allFetchedEvents: any[] = [];
+
+      // Loop through users to fetch their individual calendars
+      for (const user of targetUsers) {
+        if (!user.calendarId) continue;
+        
+        try {
+          const result = await callNurseBotAgent({
+            event: 'GOOGLE_CALENDAR_FETCH',
+            role: session.role,
+            context: {
+              userId: user.id,
+              userName: `${user.firstName} ${user.lastName}`,
+              calendarId: user.calendarId,
+              date: selectedDate
+            }
+          });
+          
+          if (result && result.events) {
+            // Tag events with the nurse's name for clarity in the UI
+            const tagged = result.events.map((e: any) => ({
+              ...e,
+              nurseName: user.firstName,
+              nurseId: user.id
+            }));
+            allFetchedEvents.push(...tagged);
+          }
+        } catch (err) {
+          console.error(`Failed to sync calendar for ${user.firstName}`, err);
+        }
+      }
+
+      setExternalEvents(allFetchedEvents);
+    } catch (e: any) {
+      console.error("Global Google Sync Error:", e.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const currentAppointments = useMemo(() => {
+    const internal = store.appointments.filter((a: any) => a.dateTime.startsWith(selectedDate));
+    const filtered = viewMode === 'me' && session ? internal.filter((a: any) => a.nurseId === session.userId) : internal;
+    
+    // Merge with external events
+    const external = store.externalEvents.filter((e: any) => e.start.startsWith(selectedDate)).map((e: any) => ({
+      ...e,
+      isExternal: true,
+      dateTime: e.start
+    }));
+
+    return [...filtered, ...external].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+  }, [store.appointments, store.externalEvents, viewMode, session, selectedDate]);
 
   const hours = useMemo(() => {
     const start = parseInt(store.settings.workingHoursStart.split(':')[0]);
     const end = parseInt(store.settings.workingHoursEnd.split(':')[0]);
-    const length = end - start + 1;
-    return Array.from({ length }, (_, i) => i + start);
+    return Array.from({ length: end - start + 1 }, (_, i) => i + start);
   }, [store.settings.workingHoursStart, store.settings.workingHoursEnd]);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!modalState || !session) return;
 
     const formData = new FormData(e.currentTarget);
     const targetNurseId = formData.get('nurseId') as string;
-    
-    if (session.role === 'infirmiere' && targetNurseId !== session.userId) {
-       alert("Vous ne pouvez planifier des soins que pour vous-même.");
-       return;
-    }
-
     const patientId = formData.get('patientId') as string;
     const durationMinutes = parseInt(formData.get('duration') as string);
     const notes = formData.get('notes') as string;
     const time = formData.get('time') as string;
     const dateTime = `${selectedDate}T${time}:00`;
 
+    let finalApt: Appointment;
+
     if (modalState.mode === 'add') {
-      const newApt: Appointment = {
+      finalApt = {
         id: Date.now().toString(),
         patientId,
         nurseId: targetNurseId,
@@ -64,10 +128,9 @@ const PlanningView: React.FC = () => {
         notes,
         createdBy: session.userId
       };
-      saveStore({ appointments: [...appointments, newApt] });
-      addLog(`Nouveau passage planifié pour ${targetNurseId}`, session.userId);
+      saveStore({ appointments: [...store.appointments, finalApt] });
     } else {
-      const updated: Appointment = {
+      finalApt = {
         ...modalState.data,
         patientId,
         nurseId: targetNurseId,
@@ -75,27 +138,58 @@ const PlanningView: React.FC = () => {
         durationMinutes,
         notes
       };
-      updateAppointment(updated);
+      updateAppointment(finalApt);
     }
+
+    // SYNC TO GOOGLE VIA N8N
+    const nurse = store.users.find((u: User) => u.id === targetNurseId);
+    if (store.settings.apiConfig.googleCalendarSync && nurse?.calendarId && (store.settings.apiConfig.n8nBaseUrl || process.env.VITE_N8N_BASE_URL)) {
+      callNurseBotAgent({
+        event: 'GOOGLE_CALENDAR_SYNC',
+        role: session.role,
+        data: JSON.stringify(finalApt),
+        context: { 
+          patient: store.patients.find((p: any) => p.id === patientId),
+          calendarId: nurse.calendarId 
+        }
+      }).catch(err => console.error("Sync to Google failed", err.message));
+    }
+
+    addLog(`Rendez-vous planifié et synchronisé Google`, session.userId);
     setModalState(null);
   };
 
   const getMapsUrl = (address: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Planning</h1>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Planning & Calendriers</h1>
           <p className="text-slate-500 text-sm font-medium">Vue {viewMode === 'me' ? 'Personnelle' : 'Cabinet'}</p>
         </div>
         
-        <div className="flex gap-2 p-1 bg-slate-200 rounded-2xl">
-           <button onClick={() => setViewMode('me')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'me' ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-500'}`}>Mon Planning</button>
-           <button onClick={() => setViewMode('cabinet')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'cabinet' ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-500'}`}>Cabinet</button>
+        <div className="flex items-center gap-3">
+           <button 
+             onClick={handleGoogleSync} 
+             disabled={isSyncing}
+             className={`px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-3 shadow-sm border ${
+               isSyncing 
+                 ? 'bg-indigo-50 border-indigo-100 text-indigo-400 cursor-wait' 
+                 : 'bg-white border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 active:scale-95'
+             }`}
+           >
+              <i className={`fa-solid ${isSyncing ? 'fa-sync fa-spin' : 'fa-google'}`}></i>
+              {isSyncing ? 'Sync en cours...' : 'Sync Agendas'}
+           </button>
+           <div className="flex gap-2 p-1 bg-slate-200 rounded-2xl shadow-inner">
+              <button onClick={() => setViewMode('me')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'me' ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Moi</button>
+              <button onClick={() => setViewMode('cabinet')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'cabinet' ? 'bg-white text-emerald-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Cabinet</button>
+           </div>
         </div>
       </div>
 
+      {/* Bar de dates */}
       <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex overflow-x-auto gap-2 scrollbar-hide sticky top-0 z-20">
         {Array.from({ length: 14 }, (_, i) => {
           const d = new Date(); d.setDate(d.getDate() + i);
@@ -109,23 +203,47 @@ const PlanningView: React.FC = () => {
         })}
       </div>
 
-      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden min-h-[500px]">
+      <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden min-h-[500px]">
         <div className="max-h-[700px] overflow-y-auto">
           {hours.map(h => {
             const hStr = h.toString().padStart(2, '0');
+            const hourItems = currentAppointments.filter(a => a.dateTime.includes(`T${hStr}:`));
+            
             return (
-            <div key={h} className="grid grid-cols-[80px_1fr] border-b border-slate-50 min-h-[80px]">
+            <div key={h} className="grid grid-cols-[80px_1fr] border-b border-slate-50 min-h-[100px]">
               <div className="flex items-center justify-center text-xs font-black text-slate-400 border-r border-slate-50 bg-slate-50/20">{h}h00</div>
-              <div className="p-2 relative group flex flex-wrap gap-2">
-                 {currentAppointments.filter(a => a.dateTime.includes(`T${hStr}:`)).map(apt => {
-                    const p = store.patients.find(pat => pat.id === apt.patientId);
+              <div className="p-4 relative group flex flex-wrap gap-3">
+                 {hourItems.map((apt: any) => {
+                    const isExternal = apt.isExternal;
+                    const p = store.patients.find((pat: any) => pat.id === apt.patientId);
+                    
                     return (
-                      <div key={apt.id} onClick={() => setModalState({ mode: 'view', data: apt })} className="bg-emerald-50 border-l-4 border-emerald-500 p-3 rounded-2xl shadow-sm cursor-pointer hover:scale-[1.01] transition-all min-w-[200px]">
-                         <div className="flex justify-between items-start">
-                           <p className="text-xs font-black text-slate-900">{p?.lastName} {p?.firstName}</p>
-                           <span className="text-[8px] font-black text-emerald-600 bg-white px-1.5 py-0.5 rounded uppercase">{apt.dateTime.split('T')[1].substring(0, 5)}</span>
+                      <div 
+                        key={apt.id} 
+                        onClick={() => !isExternal && setModalState({ mode: 'view', data: apt })} 
+                        className={`p-4 rounded-2xl shadow-sm transition-all min-w-[220px] max-w-[300px] border-l-4 ${
+                          isExternal 
+                            ? 'bg-indigo-50 border-indigo-500' 
+                            : 'bg-emerald-50 border-emerald-500 cursor-pointer hover:scale-[1.02]'
+                        }`}
+                      >
+                         <div className="flex justify-between items-start mb-2">
+                           <div className="flex flex-col">
+                              <p className="text-xs font-black text-slate-900 truncate">
+                                {isExternal ? apt.summary : `${p?.lastName} ${p?.firstName}`}
+                              </p>
+                              {isExternal && apt.nurseName && (
+                                <p className="text-[8px] font-black text-indigo-400 uppercase">Agenda de {apt.nurseName}</p>
+                              )}
+                           </div>
+                           <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase shrink-0 ${isExternal ? 'bg-indigo-200 text-indigo-700' : 'bg-white text-emerald-600'}`}>
+                             {apt.dateTime.split('T')[1].substring(0, 5)}
+                           </span>
                          </div>
-                         <p className="text-[9px] text-slate-500 font-medium truncate mt-1">{apt.notes || p?.careType}</p>
+                         <p className="text-[9px] text-slate-500 font-medium truncate">
+                            {isExternal ? "Événement Google Calendar" : (apt.notes || p?.careType)}
+                         </p>
+                         {isExternal && <i className="fa-brands fa-google text-[8px] mt-2 text-indigo-300 block"></i>}
                       </div>
                     );
                  })}
@@ -150,7 +268,7 @@ const PlanningView: React.FC = () => {
               {modalState.mode === 'view' ? (
                 (() => {
                   const apt = modalState.data;
-                  const p = store.patients.find(pat => pat.id === apt.patientId);
+                  const p = store.patients.find((pat: any) => pat.id === apt.patientId);
                   return (
                   <div className="space-y-6">
                      <div className="flex items-center gap-4">
@@ -162,21 +280,21 @@ const PlanningView: React.FC = () => {
                      </div>
                      
                      <div className="grid grid-cols-1 gap-4">
-                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4 group">
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-sm">
                               <i className="fa-solid fa-phone"></i>
                            </div>
                            <div className="flex-1">
                               <p className="text-[10px] font-black text-slate-400 uppercase">Téléphone</p>
-                              <a href={`tel:${p?.phone}`} className="text-sm font-bold text-slate-700 hover:text-emerald-500 transition-all">{p?.phone}</a>
+                              <a href={`tel:${p?.phone}`} className="text-sm font-bold text-slate-700">{p?.phone}</a>
                            </div>
                         </div>
 
-                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4 group">
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500 shadow-sm">
                               <i className="fa-solid fa-map-location-dot"></i>
                            </div>
-                           <div className="flex-1">
+                           <div className="flex-1 min-w-0">
                               <p className="text-[10px] font-black text-slate-400 uppercase">Adresse</p>
                               <p className="text-sm font-bold text-slate-700 truncate">{p?.address}</p>
                            </div>
@@ -203,14 +321,14 @@ const PlanningView: React.FC = () => {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Patient</label>
                       <select name="patientId" required defaultValue={modalState.data.patientId} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm">
                          <option value="">Sélectionner un patient...</option>
-                         {store.patients.map(p => <option key={p.id} value={p.id}>{p.lastName} {p.firstName}</option>)}
+                         {store.patients.map((p: any) => <option key={p.id} value={p.id}>{p.lastName} {p.firstName}</option>)}
                       </select>
                    </div>
                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Infirmier(ère)</label>
                          <select name="nurseId" defaultValue={modalState.data.nurseId} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm">
-                            {store.users.filter(u => u.role !== 'admin').map(u => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
+                            {store.users.filter((u: any) => u.role !== 'admin').map((u: any) => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
                          </select>
                       </div>
                       <div className="space-y-1">
@@ -226,7 +344,7 @@ const PlanningView: React.FC = () => {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Notes du soin</label>
                       <textarea name="notes" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm h-24" placeholder="Instructions particulières..."></textarea>
                    </div>
-                   <button type="submit" className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-200">Valider la planification</button>
+                   <button type="submit" className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-200">Valider et Synchroniser</button>
                 </form>
               )}
               </div>

@@ -1,15 +1,20 @@
 
 import { Role } from "../types";
 import { GoogleGenAI, Type } from "@google/genai";
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+import { getStore } from "./store";
 
 /**
  * Interface de communication avec Gemini API pour NurseBot PRO.
- * Orchestration DYNAMIQUE basée sur la liste réelle du staff.
+ * Utilise EXCLUSIVEMENT la clé API configurée dans l'environnement.
  */
 
+const getAiClient = () => {
+  // Always use process.env.API_KEY directly for initialization.
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
+
 export const processUserMessage = async (message: string, role: Role, context: any) => {
+  const ai = getAiClient();
   // Extraction des noms du staff pour l'IA
   const staffNames = context.cabinetStaff ? context.cabinetStaff.map((u: any) => u.firstName).join(', ') : "Alice, Bertrand, Carine";
 
@@ -57,6 +62,7 @@ export const processUserMessage = async (message: string, role: Role, context: a
 };
 
 export const transcribeVoiceNote = async (base64Audio: string, mimeType: string = "audio/webm") => {
+  const ai = getAiClient();
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -74,6 +80,7 @@ export const transcribeVoiceNote = async (base64Audio: string, mimeType: string 
 };
 
 export const analyzePrescriptionOCR = async (base64Image: string) => {
+  const ai = getAiClient();
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
@@ -104,6 +111,7 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
 };
 
 export const transcribeMeeting = async (text: string) => {
+  const ai = getAiClient();
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',

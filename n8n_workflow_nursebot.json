@@ -1,6 +1,6 @@
 
 {
-  "name": "NurseBot PRO - Orchestrateur Cabinet v5 - Dynamique",
+  "name": "NurseBot PRO - Orchestrateur Intégré v6",
   "nodes": [
     {
       "parameters": {
@@ -17,24 +17,85 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Message: {{ $json.body.message }} | Staff Actuel: {{ $json.body.context.cabinetStaff }}",
-        "systemMessage": "Tu es l'intelligence centrale 'NurseBot PRO', l'orchestrateur d'un cabinet d'infirmiers libéraux (IDEL). \n\n### 👥 ÉQUIPE & CONTEXTE DYNAMIQUE :\n- Tu reçois dans chaque requête la liste actuelle du staff via la variable 'cabinetStaff'.\n- RÈGLE D'OR : Ne jamais utiliser de noms d'infirmières en dur. Utilise uniquement les noms présents dans 'cabinetStaff'.\n- Si une infirmière est mentionnée mais absente de la liste, informe l'utilisateur qu'elle n'est pas configurée dans l'onglet 'Staff'.\n\n### 🏥 MISSIONS & ROUTAGE DES ACTIONS :\n\n1. GESTION DES AGENDAS (Intent: \"PLANNING\") :\n   - Cible l'agenda de l'infirmière identifiée.\n   - Données requises : Nom de l'infirmière, Date, Heure, Type de soin.\n\n2. GESTION DRIVE (Intent: \"DRIVE_CREATE_FOLDER\") :\n   - PRIORITÉ ABSOLUE : Si un patient est nouveau ou si son 'googleDriveFolderId' est manquant, tu DOIS déclencher cet intent avant toute autre action documentaire.\n\n3. TRANSMISSIONS (Intent: \"SUPABASE_SYNC\") :\n   - Analyse les passations orales ou écrites.\n   - Structure les données en : OBSERVATIONS, VIGILANCE, ACTION.\n\n4. DISCUSSION (Intent: \"CHAT\") :\n   - Pour les questions générales sur le cabinet ou les protocoles.\n\n### 🗣️ TON & POSTURE :\n- Professionnel IDEL (Jargon : BSI, AIS, AMI, Ordonnance ALD).\n- Réponses VOCALES (Twilio) : Ultra-concises (max 15 mots).\n- Réponses TEXTES (WhatsApp) : Détaillées avec emojis pro.\n\n### 📤 FORMAT DE SORTIE (JSON STRICT) :\nRéponds EXCLUSIVEMENT sous ce format JSON :\n{\n  \"reply\": \"Ta réponse à l'infirmière\",\n  \"intent\": \"PLANNING | DRIVE_CREATE_FOLDER | SUPABASE_SYNC | CHAT\",\n  \"targetNurse\": \"Prénom de l'infirmière concernée\",\n  \"patientName\": \"Nom du patient si applicable\",\n  \"actionRequired\": true,\n  \"data\": {\n    \"date\": \"YYYY-MM-DD\",\n    \"time\": \"HH:mm\",\n    \"details\": \"Détails de l'action\"\n  }\n}"
+        "text": "=Message: {{ $json.body.message }} | Staff: {{ JSON.stringify($json.body.context.cabinetStaff) }} | Date: {{ $json.body.context.currentDate }}",
+        "systemMessage": "Tu es 'NurseBot PRO', l'intelligence centrale d'un cabinet d'infirmiers libéraux.\n\n### MISSIONS :\n1. **Planning** : Synchronise les rendez-vous avec Google Calendar.\n2. **Dossiers** : Crée des dossiers Google Drive pour les nouveaux patients (intent: DRIVE_CREATE_FOLDER).\n3. **Transmissions** : Archive les notes de soins dans Supabase.\n\n### RÈGLES :\n- Utilise les outils mis à ta disposition pour interagir avec le monde réel.\n- Si le patient n'a pas de dossier Drive, crée-le impérativement.\n- Réponds toujours en JSON strict comme défini dans tes instructions."
       },
       "id": "ai-agent",
       "name": "AI Orchestrator",
       "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 1,
+      "typeVersion": 1.6,
       "position": [400, 400]
     },
     {
       "parameters": {
-        "modelName": "gemini-1.5-flash"
+        "modelName": "gemini-3-flash-preview"
       },
       "id": "gemini-model",
       "name": "Google Gemini",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
-      "position": [300, 600]
+      "position": [200, 600]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "start": "={{ $json.start }}",
+        "end": "={{ $json.end }}",
+        "additionalFields": {
+          "summary": "={{ $json.summary }}",
+          "description": "={{ $json.description }}"
+        }
+      },
+      "id": "google-calendar-tool",
+      "name": "Google Calendar Tool",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.1,
+      "position": [650, 250]
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $json.folderName }}",
+        "options": {
+          "parentId": "VOTRE_ID_PARENT_DRIVE"
+        }
+      },
+      "id": "google-drive-tool",
+      "name": "Google Drive Tool",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "table": {
+          "__rl": true,
+          "value": "appointments",
+          "mode": "list"
+        },
+        "columnToMatchOn": "id",
+        "dataToSave": "={{ $json.data }}"
+      },
+      "id": "supabase-tool",
+      "name": "Supabase Tool",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [650, 550]
+    },
+    {
+      "parameters": {},
+      "id": "memory",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [400, 600]
     }
   ],
   "connections": {
@@ -55,6 +116,50 @@
           {
             "node": "ai-agent",
             "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "ai-agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "google-calendar-tool": {
+      "main": [
+        [
+          {
+            "node": "ai-agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "google-drive-tool": {
+      "main": [
+        [
+          {
+            "node": "ai-agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "supabase-tool": {
+      "main": [
+        [
+          {
+            "node": "ai-agent",
+            "type": "ai_tool",
             "index": 0
           }
         ]

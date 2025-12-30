@@ -11,6 +11,7 @@ export interface User {
   avatar?: string;
   pin: string;
   active: boolean;
+  calendarId?: string;
 }
 
 export interface UserSession {
@@ -36,6 +37,7 @@ export interface Transmission {
   readAt?: string;
   acknowledgedBy?: string;
   acknowledgedAt?: string;
+  isDemo?: boolean;
 }
 
 export interface Patient {
@@ -64,6 +66,7 @@ export interface Patient {
   archived?: boolean;
   createdBy?: string;
   assignedNurseIds?: string[];
+  isDemo?: boolean;
 }
 
 export interface Appointment {
@@ -78,6 +81,7 @@ export interface Appointment {
   recurrent?: boolean;
   googleCalendarEventId?: string;
   createdBy?: string;
+  isDemo?: boolean;
 }
 
 export interface Prescription {
@@ -134,7 +138,6 @@ export interface ApiConfig {
   whatsappPhone?: string;
   twilioWebhookUrl: string;
   n8nApiKey: string;
-  // Added missing properties to support Cloud synchronization and AI orchestrator
   n8nBaseUrl?: string;
   supabaseUrl?: string;
   supabaseKey?: string;

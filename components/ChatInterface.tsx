@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { callNurseBotAgent } from '../services/n8nService';
 import { getCurrentSession, getStore } from '../services/store';
+import AudioVisualizer from './AudioVisualizer';
 
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
@@ -9,6 +10,7 @@ const ChatInterface: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [recordingStream, setRecordingStream] = useState<MediaStream | null>(null);
   
   const session = getCurrentSession();
   const store = getStore();
@@ -20,7 +22,7 @@ const ChatInterface: React.FC = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isTyping, isTranscribing]);
 
   const handleSendMessage = async (text?: string, isVoice: boolean = false) => {
     const finalContent = text || inputValue;
@@ -39,7 +41,6 @@ const ChatInterface: React.FC = () => {
     setIsTyping(true);
 
     try {
-      // APPEL À L'AGENT N8N AVEC CONTEXTE DYNAMIQUE DU STAFF
       const result = await callNurseBotAgent({
         event: 'CHAT',
         message: finalContent,
@@ -47,7 +48,7 @@ const ChatInterface: React.FC = () => {
         context: {
           userName: session?.name,
           currentDate: new Date().toISOString(),
-          cabinetStaff: store.users.filter((u:any) => u.active) // On envoie la liste réelle !
+          cabinetStaff: store.users.filter((u:any) => u.active)
         }
       });
       
@@ -76,6 +77,7 @@ const ChatInterface: React.FC = () => {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setRecordingStream(stream);
       const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
@@ -111,6 +113,7 @@ const ChatInterface: React.FC = () => {
           }
         };
         stream.getTracks().forEach(t => t.stop());
+        setRecordingStream(null);
       };
 
       mediaRecorder.start();
@@ -141,8 +144,13 @@ const ChatInterface: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="hidden md:flex items-center gap-3">
-           <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping"></div>
+        <div className="hidden md:flex items-center gap-4">
+           {isRecording && (
+             <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-2xl">
+                <AudioVisualizer stream={recordingStream} isRecording={isRecording} />
+                <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse"></span>
+             </div>
+           )}
            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prêt pour {store.users.length} infirmières</span>
         </div>
       </div>
@@ -183,7 +191,7 @@ const ChatInterface: React.FC = () => {
                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce delay-200"></div>
               </div>
               <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                Analyse en cours...
+                {isTranscribing ? "Transcription..." : "L'IA réfléchit..."}
               </span>
             </div>
           </div>

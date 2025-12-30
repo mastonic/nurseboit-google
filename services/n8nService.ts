@@ -4,7 +4,7 @@ import { getStore } from "./store.ts";
 
 /**
  * Service de communication NurseBot <-> n8n
- * Supporte Nginx, Traefik et Firebase Proxy
+ * Supporte le Proxy Inverse pour supprimer les erreurs CORS.
  */
 export const callNurseBotAgent = async (payload: {
   event: string;
@@ -15,34 +15,29 @@ export const callNurseBotAgent = async (payload: {
 }) => {
   const store = getStore();
   
+  // Si baseUrl commence par "/", fetch utilisera automatiquement le domaine courant (Solution Anti-CORS)
   let baseUrl = (payload.context?.config?.n8nBaseUrl || 
                 store.settings.apiConfig.n8nBaseUrl || 
-                process.env.VITE_N8N_BASE_URL || "").trim();
+                "/nursebot-gateway").trim();
 
   const apiKey = (payload.context?.config?.n8nApiKey || 
                  store.settings.apiConfig.n8nApiKey || 
-                 process.env.VITE_N8N_API_KEY || "").replace(/[^\x00-\xFF]/g, "").trim();
-
-  if (!baseUrl) {
-    throw new Error("CONFIG_MISSING: L'URL du webhook n8n n'est pas renseignée.");
-  }
-
-  const isProxy = baseUrl.startsWith('/');
-  const finalUrl = isProxy 
-    ? `${window.location.origin}${baseUrl}` 
-    : baseUrl.replace(/\/+$/, "");
+                 "").trim();
 
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    const response = await fetch(finalUrl, {
+    // Si baseUrl est relatif, pas besoin de mode 'cors', 'same-origin' suffit
+    const isRelative = baseUrl.startsWith('/');
+    
+    const response = await fetch(baseUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
         'X-N8N-API-KEY': apiKey
       },
+      mode: isRelative ? 'same-origin' : 'cors',
       signal: controller.signal,
       body: JSON.stringify({
         ...payload,
@@ -52,28 +47,13 @@ export const callNurseBotAgent = async (payload: {
 
     clearTimeout(timeoutId);
 
-    if (response.status === 404) {
-      const body = await response.text();
-      // Si le corps contient "Google" ou "Firebase", c'est une erreur de routage DNS/Cloud
-      if (body.toLowerCase().includes('google') || body.toLowerCase().includes('firebase')) {
-        throw new Error("ERR_PROXY_404: Google Cloud intercepte votre requête. Vérifiez votre DNS (IP du VPS).");
-      }
-      throw new Error(isProxy ? "ERR_PROXY_404" : "ERR_URL_404");
-    }
-
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`API_ERROR: ${response.status} - ${text.slice(0, 50)}`);
+      throw new Error(`API_ERROR: ${response.status}`);
     }
 
     return await response.json();
   } catch (error: any) {
-    if (error.name === 'AbortError') throw new Error("TIMEOUT: L'IA met trop de temps à répondre.");
-    
-    if (error.message.includes('Failed to fetch')) {
-      throw new Error(isProxy ? "ERR_NETWORK_PROXY" : "ERR_CORS_OR_DOWN");
-    }
-
+    console.error("n8n Agent Error:", error.message);
     throw error;
   }
 };

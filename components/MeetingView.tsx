@@ -33,6 +33,7 @@ const MeetingView: React.FC = () => {
     const role = formData.get('role') as Role;
     const phone = formData.get('phone') as string;
     const pin = formData.get('pin') as string;
+    const calendarId = formData.get('calendarId') as string;
 
     const userData: User = {
       id: typeof showUserModal === 'object' && showUserModal ? showUserModal.id : `u-${Date.now()}`,
@@ -41,7 +42,8 @@ const MeetingView: React.FC = () => {
       role,
       phone,
       pin: pin || '1234',
-      active: true
+      active: true,
+      calendarId: calendarId || undefined
     };
     upsertUser(userData);
     setShowUserModal(null);
@@ -63,12 +65,19 @@ const MeetingView: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {store.users.map(u => (
-             <div key={u.id} onClick={() => setShowUserModal(u)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
+             <div key={u.id} onClick={() => setShowUserModal(u)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-lg hover:shadow-xl transition-all cursor-pointer group relative overflow-hidden">
                 <div className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-xl mb-5 group-hover:scale-110 transition-transform">
                    {u.firstName[0]}
                 </div>
                 <h3 className="font-black text-slate-900 leading-tight uppercase text-sm truncate">{u.firstName} {u.lastName}</h3>
                 <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">{u.role}</p>
+                
+                {u.calendarId && (
+                  <div className="absolute top-4 right-4 text-emerald-500" title="Calendar Sync Enabled">
+                    <i className="fa-solid fa-calendar-check"></i>
+                  </div>
+                )}
+
                 <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-3 text-slate-400">
                    <i className="fa-solid fa-phone text-[10px]"></i>
                    <span className="text-[10px] font-bold">{u.phone || 'Non renseigné'}</span>
@@ -140,7 +149,7 @@ const MeetingView: React.FC = () => {
       {/* USER MODAL */}
       {showUserModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
-           <form onSubmit={handleSaveUser} className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 space-y-6 animate-in zoom-in">
+           <form onSubmit={handleSaveUser} className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 space-y-6 animate-in zoom-in max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center">
                  <h3 className="font-black text-2xl">{showUserModal === 'add' ? 'Nouveau Membre' : 'Modifier Profil'}</h3>
                  <button type="button" onClick={() => setShowUserModal(null)} className="text-slate-300 hover:text-slate-600"><i className="fa-solid fa-xmark text-2xl"></i></button>
@@ -167,6 +176,11 @@ const MeetingView: React.FC = () => {
                  <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Téléphone</label>
                     <input name="phone" required defaultValue={typeof showUserModal === 'object' ? showUserModal.phone : ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Google Calendar ID</label>
+                    <input name="calendarId" defaultValue={typeof showUserModal === 'object' ? showUserModal.calendarId : ''} placeholder="exemple@gmail.com ou ID-agenda" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+                    <p className="text-[9px] text-slate-400 italic ml-1">Utilisé pour la synchronisation du planning.</p>
                  </div>
                  <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Code PIN (4 chiffres)</label>
