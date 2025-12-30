@@ -16,7 +16,7 @@ const cmd = (command: string) => {
   try {
     return execSync(command, { stdio: 'inherit' });
   } catch (e) {
-    console.error(`❌ Erreur : ${command}`);
+    console.error(`❌ Erreur lors de l'exécution : ${command}`);
     throw e;
   }
 };
@@ -31,10 +31,18 @@ async function setup() {
     cmd("npm install");
     cmd("npm run build");
 
-    // 2. Docker Compose (Intégration Traefik Hostinger)
+    // 2. Nettoyage pré-déploiement
+    log("Nettoyage des anciens conteneurs...", '🧹');
+    try {
+      // On force la suppression du conteneur s'il existe pour éviter le conflit de nom
+      execSync("docker rm -f nursebot-app", { stdio: 'ignore' });
+    } catch (e) {
+      // Ignorer si le conteneur n'existe pas
+    }
+
+    // 3. Docker Compose (Intégration Traefik Hostinger)
     log(`Génération du Docker Compose pour ${DOMAIN}...`, '📝');
     const dockerCompose = `
-version: "3.7"
 services:
   nursebot:
     image: nginx:stable-alpine
@@ -59,17 +67,17 @@ networks:
 `;
     fs.writeFileSync(`${APP_PATH}/docker-compose.yml`, dockerCompose.trim());
 
-    // 3. Lancement
+    // 4. Lancement
     log("Démarrage du conteneur...", '🚢');
-    cmd(`docker compose -f ${APP_PATH}/docker-compose.yml up -d --force-recreate`);
+    cmd(`docker compose -f ${APP_PATH}/docker-compose.yml up -d --force-recreate --remove-orphans`);
 
-    // 4. Permissions finalisées
+    // 5. Permissions finalisées
     cmd(`sudo chmod -R 755 ${APP_PATH}/dist`);
 
     log("CONFIGURATION RÉUSSIE !", '✅');
     console.log(`\n1. Votre application devrait être accessible sur :`);
     console.log(`👉 https://${DOMAIN}`);
-    console.log(`\n(Si le SSL met quelques minutes à arriver, testez sur http://${DOMAIN})`);
+    console.log(`\n(Le SSL Traefik peut prendre 1 à 2 minutes pour s'activer)`);
 
   } catch (err: any) {
     log(`ERREUR : ${err.message}`, '❌');
