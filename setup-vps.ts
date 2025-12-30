@@ -4,8 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * NurseBot PRO - VPS Setup Orchestrator (v1.0)
- * Usage: npx tsx setup-vps.ts
+ * NurseBot PRO - VPS Setup Orchestrator (v1.2)
+ * Correction Conflit Port 80
  */
 
 const DOMAIN = "srv1146904.hstgr.cloud";
@@ -17,50 +17,62 @@ const cmd = (command: string) => {
   try {
     return execSync(command, { stdio: 'inherit' });
   } catch (e) {
-    console.error(`Erreur lors de l'exécution : ${command}`);
+    console.error(`❌ Erreur : ${command}`);
     throw e;
   }
 };
 
 async function setup() {
-  log("DÉMARRAGE DE L'INSTALLATION FRESH START - NURSEBOT PRO", '🔥');
+  log("INITIALISATION COMPLÈTE DU VPS - NURSEBOT PRO", '🔥');
 
   try {
-    // 1. Nettoyage initial
-    log("Nettoyage des anciens conteneurs...", '🧹');
+    // 0. LIBÉRATION DES PORTS (Crucial pour Traefik)
+    log("Libération des ports 80 et 443...", '🔓');
     try {
-      cmd("docker compose -f /root/docker-compose.yml down || true");
-      cmd("docker stop nursebot traefik n8n || true");
-      cmd("docker rm nursebot traefik n8n || true");
-    } catch (e) {}
+      cmd("sudo systemctl stop nginx || true");
+      cmd("sudo systemctl disable nginx || true");
+      cmd("sudo systemctl stop apache2 || true");
+      cmd("sudo systemctl disable apache2 || true");
+      // On tue tout processus qui écoute encore sur le port 80
+      cmd("sudo fuser -k 80/tcp || true");
+      cmd("sudo fuser -k 443/tcp || true");
+    } catch (e) {
+      log("Ports déjà libres ou outils fuser manquants.", 'ℹ️');
+    }
 
-    // 2. Installation des dépendances système
-    log("Mise à jour du système et installation des outils...", '🛠️');
-    cmd("sudo apt-get update");
-    cmd("sudo apt-get install -y git rsync curl ca-certificates gnupg");
+    // 1. Préparation Système
+    log("Mise à jour du système...", '🛠️');
+    cmd("sudo apt-get update && sudo apt-get upgrade -y");
+    cmd("sudo apt-get install -y git rsync curl ca-certificates gnupg ufw psmisc");
 
-    // 3. Configuration Docker si nécessaire
-    log("Vérification de Docker...", '🐳');
+    // 2. Pare-feu (Sécurité IDEL)
+    log("Configuration du pare-feu...", '🛡️');
+    cmd("sudo ufw allow 22/tcp");
+    cmd("sudo ufw allow 80/tcp");
+    cmd("sudo ufw allow 443/tcp");
+    cmd("sudo ufw --force enable");
+
+    // 3. Installation Docker
+    log("Vérification Docker...", '🐳');
     try {
       cmd("docker --version");
-    } catch (e) {
-      log("Installation de Docker...", '📦');
+    } catch {
       cmd("curl -fsSL https://get.docker.com -o get-docker.sh");
-      cmd("sh get-docker.sh");
+      cmd("sudo sh get-docker.sh");
+      cmd("sudo usermod -aG docker $USER");
     }
 
     // 4. Structure des dossiers
-    log("Configuration de la structure des dossiers...", '📂');
+    log("Dossiers...", '📂');
     if (!fs.existsSync(APP_PATH)) {
       cmd(`sudo mkdir -p ${APP_PATH}`);
     }
-    cmd(`sudo chown -R ${process.env.USER || 'root'}:${process.env.USER || 'root'} ${APP_PATH}`);
+    cmd(`sudo chown -R $USER:$USER ${APP_PATH}`);
 
-    // 5. Génération du Docker Compose Master
-    log("Génération du fichier docker-compose.yml...", '📝');
+    // 5. Docker Compose
+    log("Génération docker-compose.yml...", '📝');
     const dockerCompose = `
 version: "3.7"
-
 services:
   traefik:
     image: "traefik:v2.10"
@@ -124,34 +136,30 @@ services:
 networks:
   web:
     external: false
-
 volumes:
   traefik_data:
   n8n_data:
     `;
     fs.writeFileSync('/root/docker-compose.yml', dockerCompose.trim());
 
-    // 6. Installation Node & Build Front
-    log("Installation propre des dépendances Node...", '📦');
+    // 6. Build
+    log("Build Front...", '⚡');
     process.chdir(APP_PATH);
-    cmd("rm -rf node_modules package-lock.json");
-    cmd("npm install");
-    
-    log("Exécution du Build de production...", '⚡');
-    cmd("npm run build");
+    cmd("npm install && npm run build");
 
-    // 7. Lancement de l'infrastructure
-    log("Démarrage de Docker Compose...", '🚢');
-    cmd("docker compose -f /root/docker-compose.yml up -d --force-recreate");
+    // 7. Start
+    log("Démarrage Docker Compose...", '🚢');
+    // On force l'arrêt des conteneurs qui pourraient être dans un état instable
+    cmd("sudo docker compose -f /root/docker-compose.yml down || true");
+    cmd("sudo docker compose -f /root/docker-compose.yml up -d");
 
-    // 8. Permissions Finales
-    log("Réparation finale des permissions...", '🔐');
+    // 8. Permissions
+    log("Permissions...", '🔐');
     cmd(`sudo chown -R 33:33 ${APP_PATH}/dist`);
     cmd(`sudo chmod -R 755 ${APP_PATH}/dist`);
 
-    log("CONFIGURATION TERMINÉE AVEC SUCCÈS !", '✅');
-    log(`Accès App : https://nursebot.${DOMAIN}`, '🌐');
-    log(`Accès n8n : https://n8n.${DOMAIN}`, '🤖');
+    log("TERMINÉ !", '✅');
+    log(`App : https://nursebot.${DOMAIN}`, '🌐');
 
   } catch (err: any) {
     log(`ERREUR FATALE : ${err.message}`, '❌');
