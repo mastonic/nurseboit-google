@@ -91,8 +91,8 @@ volumes:
     <div className="space-y-10 pb-32 animate-in fade-in max-w-6xl mx-auto">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Maintenance Serveur</h1>
-           <p className="text-slate-500 font-medium tracking-tight">Correction de l'erreur 404 & Page Blanche.</p>
+           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Status Infrastructure</h1>
+           <p className="text-slate-500 font-medium">Diagnostic et Déploiement Stable v2.6</p>
         </div>
         <div className="flex gap-2 p-1.5 bg-slate-100 rounded-3xl">
            {['vps', 'n8n'].map(tab => (
@@ -101,7 +101,7 @@ volumes:
                 onClick={() => setActiveTab(tab as any)} 
                 className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-emerald-500 shadow-xl border border-slate-100' : 'text-slate-400'}`}
               >
-                 {tab === 'vps' ? 'Correctif VPS' : 'IA n8n'}
+                 {tab === 'vps' ? 'Correctif 404' : 'IA n8n'}
               </button>
            ))}
         </div>
@@ -109,40 +109,38 @@ volumes:
 
       {activeTab === 'vps' && (
         <div className="space-y-8 animate-in slide-in-from-bottom-4">
-           {/* GUIDE DE RÉPARATION */}
-           <div className="bg-emerald-50 border-2 border-emerald-200 p-8 rounded-[2.5rem] space-y-4">
-              <h3 className="text-emerald-800 font-black flex items-center gap-3">
-                 <i className="fa-solid fa-screwdriver-wrench"></i>
-                 Procédure de réparation finale
+           {/* ALERTE FINALE */}
+           <div className="bg-rose-50 border-2 border-rose-200 p-8 rounded-[2.5rem] space-y-4">
+              <h3 className="text-rose-700 font-black flex items-center gap-3">
+                 <i className="fa-solid fa-triangle-exclamation"></i>
+                 ATTENTION : Évitez "npm run build" manuel
               </h3>
-              <div className="text-xs text-emerald-700 space-y-4 font-bold">
-                 <p>1. Copiez le <b>Docker-Compose</b> ci-dessous (j'ai retiré les variables problématiques).</p>
-                 <p>2. Lancez <code className="bg-emerald-100 px-2 py-1 rounded">npx tsx deploy.ts</code> (le script ne supprimera plus vos fichiers).</p>
-                 <p>3. Redémarrez docker pour valider les routes Traefik.</p>
-              </div>
+              <p className="text-xs text-rose-600 font-bold">
+                 Le script <code className="bg-rose-100 px-1 rounded">deploy.ts v2.6</code> s'occupe de tout. 
+                 Si vous voyez une page blanche, c'est que les permissions Nginx sont incorrectes (corrigé par le script).
+              </p>
            </div>
 
-           {/* DOCKER COMPOSE SANS VARIABLES */}
-           <div className="bg-slate-950 text-white p-10 rounded-[3.5rem] shadow-2xl space-y-8 border border-white/10">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-black text-emerald-400 flex items-center gap-3">
-                   <i className="fa-solid fa-box-archive"></i>
-                   Fichier docker-compose.yml (Statique)
-                </h3>
+           {/* DOCKER COMPOSE */}
+           <div className="bg-slate-950 text-white p-10 rounded-[3.5rem] shadow-2xl border border-white/10">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black text-emerald-400">Docker-Compose (Chemins Statiques)</h3>
                 <button onClick={() => copyToClipboard(getFixedDockerCompose())} className="text-[10px] font-black text-slate-500 hover:text-white uppercase">Copier</button>
               </div>
-              <pre className="bg-black p-6 rounded-3xl text-[10px] font-mono text-emerald-500 overflow-x-auto border border-emerald-500/20 max-h-[500px]">
+              <pre className="bg-black p-6 rounded-3xl text-[10px] font-mono text-emerald-500 overflow-x-auto border border-emerald-500/20 max-h-[400px]">
                 {getFixedDockerCompose()}
               </pre>
            </div>
 
-           {/* COMMANDES DE RELANCE */}
+           {/* PROCÉDURE SSH */}
            <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-xl space-y-6">
-              <h3 className="text-xl font-black text-slate-900">3. Commandes à exécuter</h3>
-              <div className="bg-slate-900 p-6 rounded-2xl space-y-3 font-mono text-[11px] text-emerald-400">
-                 <p># Appliquer le build corrigé</p>
+              <h3 className="text-xl font-black text-slate-900">Procédure de relance propre</h3>
+              <div className="bg-slate-900 p-6 rounded-2xl space-y-4 font-mono text-[11px] text-emerald-400">
+                 <p># 1. Vérifier le fichier compose</p>
+                 <p>nano /root/docker-compose.yml (Collez le contenu ci-dessus)</p>
+                 <p className="pt-4"># 2. Exécuter le déploiement sans écrasement</p>
                  <p>cd /opt/nursebot/app && npx tsx deploy.ts</p>
-                 <p className="pt-4"># Redémarrer l'infrastructure</p>
+                 <p className="pt-4"># 3. Forcer Docker à prendre les routes</p>
                  <p>docker compose -f /root/docker-compose.yml up -d --force-recreate</p>
               </div>
            </div>

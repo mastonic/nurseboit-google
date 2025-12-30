@@ -4,7 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * NurseBot PRO - Script de Déploiement "Ultra-Stable" (Version 2.5)
+ * NurseBot PRO - Script de Déploiement "Robust" (Version 2.7)
+ * Correction spécifique pour l'erreur ERR_MODULE_NOT_FOUND (Vite).
  */
 
 const CONFIG = {
@@ -17,40 +18,57 @@ const CONFIG = {
 const log = (msg: string, emoji = 'ℹ️') => console.log(`${emoji} ${msg}`);
 const error = (msg: string) => {
   console.error(`\n❌ ERREUR CRITIQUE : ${msg}\n`);
-  // Fix: Cast process to any to access exit() when standard Process types are restricted or incomplete
   (process as any).exit(1);
 };
 
 async function run() {
-  console.log('\n🚀 --- NurseBot PRO : Déploiement Stable v2.5 --- 🚀\n');
+  console.log('\n🚀 --- NurseBot PRO : Déploiement Stable v2.7 --- 🚀\n');
 
   try {
-    // Fix: Cast process to any to access cwd() when standard Process types are restricted or incomplete
     const rootDir = (process as any).cwd();
     const distPath = path.resolve(rootDir, CONFIG.distDir);
 
-    // 1. Nettoyage Git & Pull
+    log(`Répertoire de travail : ${rootDir}`, '📂');
+
+    // 1. Synchronisation Git
     log(`Synchronisation Git...`, '🌿');
     try {
-      execSync(`git fetch origin && git reset --hard origin/${CONFIG.branch}`, { stdio: 'inherit' });
+      execSync(`git fetch origin ${CONFIG.branch}`, { stdio: 'inherit' });
+      log('Fetch terminé.', '✅');
     } catch (e) {
-      log('Git reset échoué, continuation...', '⚠️');
+      log('Git fetch échoué ou ignoré.', '⚠️');
     }
 
-    // 2. Build Vite
-    log('Installation et Build...', '🏗️');
-    execSync('npm install && npx vite build', { 
-      stdio: 'inherit',
-      env: { ...process.env, NODE_ENV: 'production' }
-    });
+    // 2. Installation des dépendances
+    log('Réparation des dépendances (npm install)...', '📦');
+    try {
+      // On force npm install pour être sûr que 'vite' est bien lié dans node_modules
+      execSync('npm install', { stdio: 'inherit' });
+    } catch (e: any) {
+      log('Erreur npm install, tentative de nettoyage...', '⚠️');
+      execSync('rm -rf node_modules package-lock.json && npm install', { stdio: 'inherit' });
+    }
 
-    if (!fs.existsSync(path.join(distPath, 'index.html'))) {
-      error("Le build a échoué : index.html absent du dossier dist.");
+    // 3. Build Production
+    log('Exécution du build (npm run build)...', '⚡');
+    try {
+      // npm run build est plus stable que npx car il initialise mieux le PATH
+      execSync('npm run build', { 
+        stdio: 'inherit',
+        env: { ...process.env, NODE_ENV: 'production' }
+      });
+    } catch (e: any) {
+      log('Le build via npm a échoué, tentative via npx direct...', '⚠️');
+      execSync('npx vite build', { stdio: 'inherit' });
+    }
+
+    // Vérification finale du build
+    if (!fs.existsSync(distPath) || !fs.existsSync(path.join(distPath, 'index.html'))) {
+      error("Le dossier 'dist' est vide ou incomplet après le build.");
     }
     
-    // 3. Gestion du déploiement Docker
-    log(`Vérification du conteneur [${CONFIG.containerName}]...`, '🔍');
-    
+    // 4. Synchronisation avec Docker
+    log(`Analyse du conteneur [${CONFIG.containerName}]...`, '🔍');
     let hostPath = '';
     try {
       const inspect = execSync(`docker inspect ${CONFIG.containerName} --format '{{ json .Mounts }}'`).toString();
@@ -58,37 +76,37 @@ async function run() {
       const htmlMount = mounts.find((m: any) => m.Destination === CONFIG.containerTarget);
       if (htmlMount) hostPath = htmlMount.Source;
     } catch (e) {
-      log("Conteneur non détecté, tentative de démarrage via docker-cp...", '⚠️');
+      log("Conteneur non trouvé.", '⚠️');
     }
 
-    // LOGIQUE DE COPIE SÉCURISÉE
     if (hostPath) {
       const resolvedHost = path.resolve(hostPath);
       const resolvedDist = path.resolve(distPath);
 
       if (resolvedHost === resolvedDist) {
-        log(`Dossiers identiques : Les fichiers sont déjà en place dans ${resolvedHost}`, '✨');
+        log(`Volume Direct : Le build est déjà prêt dans ${resolvedHost}`, '✨');
       } else {
-        log(`Mise à jour du point de montage : ${resolvedHost}`, '🚀');
+        log(`Mise à jour du volume hôte : ${resolvedHost}`, '🚀');
         execSync(`sudo rm -rf ${resolvedHost}/*`);
-        execSync(`sudo cp -rf ${resolvedDist}/* ${resolvedHost}/`);
+        execSync(`sudo cp -rp ${resolvedDist}/. ${resolvedHost}/`);
       }
       
-      // Réparation des droits pour Nginx (UID 33 = www-data)
+      log('Permissions Nginx (www-data)...', '🔐');
       execSync(`sudo chown -R 33:33 ${resolvedHost}`);
+      execSync(`sudo chmod -R 755 ${resolvedHost}`);
     } else {
-      log(`Mode Secours : Transfert manuel vers le conteneur...`, '📤');
+      log(`Mode Fallback : Docker CP...`, '📤');
       execSync(`docker cp ${distPath}/. ${CONFIG.containerName}:${CONFIG.containerTarget}/`);
       execSync(`docker exec ${CONFIG.containerName} chown -R 33:33 ${CONFIG.containerTarget}`);
     }
 
-    // 4. Reload Nginx
+    // 5. Reload
     try {
       execSync(`docker exec ${CONFIG.containerName} nginx -s reload`);
-      log('Nginx rafraîchi avec succès.', '🔄');
+      log('Nginx rafraîchi.', '🔄');
     } catch (e) {}
 
-    log('DÉPLOIEMENT TERMINÉ AVEC SUCCÈS !', '✅');
+    log('DÉPLOIEMENT RÉUSSI !', '✅');
 
   } catch (err: any) {
     error(err.message);
