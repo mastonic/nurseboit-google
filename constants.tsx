@@ -11,9 +11,9 @@ export const NGAP_CATALOG = [
 ];
 
 export const MOCK_NURSES = [
-  { id: 'u1', name: 'Alice Martin', role: 'admin' as const },
-  { id: 'u2', name: 'Bertrand Durand', role: 'infirmiere' as const },
-  { id: 'u3', name: 'Carine Lefebvre', role: 'infirmiereAdmin' as const }
+  { id: 'u1', name: 'Alice Martin', role: 'admin' },
+  { id: 'u2', name: 'Bertrand Durand', role: 'infirmiere' },
+  { id: 'u3', name: 'Carine Lefebvre', role: 'infirmiereAdmin' }
 ];
 
 export const MOCK_PATIENTS: Patient[] = [

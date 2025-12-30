@@ -1,38 +1,43 @@
+
 import { Role } from "../types";
 import { GoogleGenAI, Type } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * Interface de communication avec Gemini API.
+ * Interface de communication avec Gemini API pour NurseBot PRO.
+ * Orchestration DYNAMIQUE basée sur la liste réelle du staff.
  */
 
 export const processUserMessage = async (message: string, role: Role, context: any) => {
+  // Extraction des noms du staff pour l'IA
+  const staffNames = context.cabinetStaff ? context.cabinetStaff.map((u: any) => u.firstName).join(', ') : "Alice, Bertrand, Carine";
+
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: message,
       config: {
-        systemInstruction: `Tu es NurseBot PRO, l'assistant expert pour un cabinet d'infirmiers libéraux (IDEL). 
-        Rôle de l'utilisateur actuel: ${role}. 
-        Contexte patient/planning: ${JSON.stringify(context)}.
+        systemInstruction: `Tu es NurseBot PRO, l'IA orchestratrice du cabinet.
         
-        TES MISSIONS:
-        1. TRANSMISSION: Aide à rédiger des transmissions ciblées (Observations, Vigilance, Actions).
-        2. PLANNING: Aide à organiser les tournées et détecter les conflits.
-        3. FACTURATION: Aide sur la nomenclature NGAP (AMI, AIS, BSI) et les majorations.
-        4. CLINIQUE: Fournit des rappels de protocoles basés sur les bonnes pratiques.
-
-        CONSIGNES:
-        - Réponds de manière très concise, professionnelle et empathique.
-        - Utilise le jargon IDEL approprié (DSI, BSI, tournées, cotations).
-        - Retourne uniquement un JSON structuré avec 'reply' (ton texte), 'intent' (CHAT|TRANSMISSION|PLANNING|BILLING) et 'actionRequired' (boolean).`,
+        STAFF ACTUEL : ${staffNames}.
+        
+        RÈGLES D'IDENTIFICATION :
+        - Identifie l'infirmière concernée parmi la liste ci-dessus.
+        - Si un nouveau membre est mentionné mais absent de la liste, suggère de le créer dans l'onglet 'Staff'.
+        
+        LOGIQUE DRIVE : 
+        Si context.patient.googleDriveFolderId est manquant, ton intention PRIORITAIRE est 'DRIVE_CREATE_FOLDER'.
+        
+        LOGIQUE RÉPONSE :
+        Adapte le ton : Vocal (Twilio) = Très court / Texte (WhatsApp) = Détaillé.`,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             reply: { type: Type.STRING },
-            intent: { type: Type.STRING },
+            intent: { type: Type.STRING, description: "CHAT|PLANNING|DRIVE_CREATE_FOLDER|SUPABASE_SYNC" },
+            targetNurse: { type: Type.STRING, description: "Nom de l'infirmière identifiée dans la liste" },
             actionRequired: { type: Type.BOOLEAN }
           },
           required: ['reply', 'intent', 'actionRequired']
@@ -44,7 +49,7 @@ export const processUserMessage = async (message: string, role: Role, context: a
   } catch (error) {
     console.error("Gemini processUserMessage error:", error);
     return { 
-      reply: "[Service IA] Une erreur est survenue lors de la communication avec l'assistant.", 
+      reply: "L'orchestrateur rencontre une difficulté de synchronisation.", 
       intent: "CHAT", 
       actionRequired: false 
     };
@@ -58,14 +63,13 @@ export const transcribeVoiceNote = async (base64Audio: string, mimeType: string 
       contents: {
         parts: [
           { inlineData: { data: base64Audio, mimeType } },
-          { text: "Transcris fidèlement ce message audio professionnel infirmier. Extrais-en le contenu clinique pur, sans fioritures." }
+          { text: "Transcris cette transmission. Sois précis sur les constantes médicales." }
         ]
       }
     });
     return { transcription: response.text };
   } catch (error) {
-    console.error("Gemini transcription error:", error);
-    return { transcription: "[Erreur de transcription vocale]" };
+    return { transcription: "[Erreur de transcription]" };
   }
 };
 
@@ -76,7 +80,7 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
       contents: {
         parts: [
           { inlineData: { data: base64Image, mimeType: 'image/png' } },
-          { text: "Analyse cette ordonnance et extrais les données médicales structurées." }
+          { text: "Extrais les données de l'ordonnance." }
         ]
       },
       config: {
@@ -85,18 +89,16 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
           type: Type.OBJECT,
           properties: {
             prescriber: { type: Type.STRING },
-            rpps: { type: Type.STRING },
             datePrescribed: { type: Type.STRING },
-            dateExpiry: { type: Type.STRING },
             careDetails: { type: Type.STRING },
             patientName: { type: Type.STRING }
-          }
+          },
+          required: ['prescriber', 'careDetails']
         }
       }
     });
     return JSON.parse(response.text || "{}");
   } catch (error) {
-    console.error("Gemini OCR error:", error);
     return {};
   }
 };
@@ -104,8 +106,8 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
 export const transcribeMeeting = async (text: string) => {
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Résume cette réunion de cabinet IDEL en décisions et tâches: ${text}`,
+      model: 'gemini-3-pro-preview',
+      contents: `Synthétise cette réunion : ${text}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -127,9 +129,8 @@ export const transcribeMeeting = async (text: string) => {
         }
       }
     });
-    return JSON.parse(response.text || "{}");
+    return JSON.parse(response.text || '{"decisions":[], "tasks":[]}');
   } catch (error) {
-    console.error("Gemini coordination error:", error);
     return { decisions: [], tasks: [] };
   }
 };

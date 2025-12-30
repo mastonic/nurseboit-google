@@ -1,42 +1,15 @@
 
-import { Patient, Appointment, Prescription, PreInvoice, UserSession, Transmission, Message, Task, User, Role } from '../types';
+import { Patient, Appointment, Prescription, PreInvoice, UserSession, Transmission, Task, User, Settings } from '../types';
 import { MOCK_PATIENTS, MOCK_APPOINTMENTS, MOCK_INVOICES, MOCK_PRESCRIPTIONS, MOCK_NURSES } from '../constants';
 import { createClient } from '@supabase/supabase-js';
 
-// Récupération des variables injectées par Vite
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
-
-const getSupabase = () => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL === '' || SUPABASE_URL.includes('YOUR_')) return null;
-  try {
-    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  } catch (e) {
-    return null;
-  }
-};
-
 const SESSION_KEY = 'nursebot_session';
+const OFFLINE_DATA_KEY = 'nursebot_offline_data';
 const UPDATE_EVENT = 'nursebot-store-update';
-
-export interface DBHealth {
-  config: boolean;
-  network: boolean;
-  auth: boolean;
-  tables: boolean;
-  lastSync: string | null;
-}
 
 let state: any = {
   dbStatus: 'loading',
   dbError: null,
-  dbHealth: {
-    config: false,
-    network: false,
-    auth: false,
-    tables: false,
-    lastSync: null
-  } as DBHealth,
   patients: [],
   appointments: [],
   prescriptions: [],
@@ -46,10 +19,9 @@ let state: any = {
   invoices: [],
   users: [],
   tasks: [],
-  messages: [], 
+  messages: [],
   alerts: [],
   logs: [],
-  notifications: [],
   settings: {
     cabinetName: 'Cabinet Infirmier Pro',
     workingHoursStart: '06:00',
@@ -59,123 +31,100 @@ let state: any = {
       twilioSid: '',
       twilioToken: '',
       twilioPhone: '',
-      twilioWebhookUrl: process.env.VITE_N8N_BASE_URL || '',
-      n8nApiKey: process.env.VITE_N8N_API_KEY || '',
+      whatsappPhone: '',
+      twilioWebhookUrl: '',
+      n8nApiKey: '',
+      n8nBaseUrl: '',
+      supabaseUrl: '',
+      supabaseKey: '',
       resendKey: '',
       googleCalendarSync: false
     }
   }
 };
 
+export const getSupabaseClient = () => {
+  const url = state.settings.apiConfig.supabaseUrl || process.env.VITE_SUPABASE_URL || '';
+  const key = state.settings.apiConfig.supabaseKey || process.env.VITE_SUPABASE_ANON_KEY || '';
+  
+  if (!url || !key || url.includes('YOUR_') || url === '') return null;
+  try {
+    return createClient(url, key);
+  } catch (e) {
+    return null;
+  }
+};
+
 export const initStore = async () => {
-  const supabase = getSupabase();
-  loadLocalData(); 
+  loadLocalData();
   
-  // 1. Check Config
-  const hasUrl = !!SUPABASE_URL && SUPABASE_URL !== '';
-  const hasKey = !!SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== '';
-  state.dbHealth.config = hasUrl && hasKey && !SUPABASE_URL.includes('YOUR_');
-  
+  const supabase = getSupabaseClient();
   if (!supabase) {
     state.dbStatus = 'local';
-    if (!hasUrl || !hasKey) {
-      state.dbError = "Configuration absente : Vérifiez le fichier .env sur le VPS et relancez un build.";
-    } else {
-      state.dbError = "Format d'URL ou de clé invalide.";
-    }
     window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
     return;
   }
 
   try {
     state.dbStatus = 'loading';
-    
-    // 2. Check Network & Auth (Ping)
-    const { data: pingData, error: pingError } = await supabase.from('users').select('id').limit(1);
-    
-    if (pingError) {
-      state.dbHealth.network = false;
-      state.dbHealth.auth = false;
-      state.dbStatus = 'error';
-      state.dbError = `Erreur Supabase: ${pingError.message}`;
-      throw pingError;
-    }
-
-    state.dbHealth.network = true;
-    state.dbHealth.auth = true;
-
-    // 3. Check Tables Accessibility
-    const results = await Promise.allSettled([
+    const [uRes, pRes, aRes, tRes] = await Promise.all([
       supabase.from('users').select('*'),
       supabase.from('patients').select('*'),
       supabase.from('appointments').select('*'),
-      supabase.from('transmissions').select('*').order('timestamp', { ascending: false }),
-      supabase.from('tasks').select('*'),
-      supabase.from('notifications').select('*').order('created_at', { ascending: false })
+      supabase.from('transmissions').select('*').order('timestamp', { ascending: false })
     ]);
-
-    const allResolved = results.every(r => r.status === 'fulfilled');
-    state.dbHealth.tables = allResolved;
-
-    // Mapping des données
-    const getData = (index: number) => {
-      const res = results[index];
-      return res.status === 'fulfilled' ? (res as any).value.data || [] : [];
-    };
 
     state = {
       ...state,
       dbStatus: 'connected',
-      dbError: null,
-      dbHealth: { ...state.dbHealth, lastSync: new Date().toISOString() },
-      users: getData(0).map((user: any) => ({ 
-        id: user.id, firstName: user.first_name, lastName: user.last_name, 
-        role: user.role, pin: user.pin, active: user.active, phone: user.phone 
-      })),
-      patients: getData(1).map((pat: any) => ({ 
-        ...pat, firstName: pat.first_name, lastName: pat.last_name, 
-        careType: pat.care_type, isALD: pat.is_ald 
-      })),
-      appointments: getData(2),
-      transmissions: getData(3),
-      tasks: getData(4),
-      notifications: getData(5)
+      users: uRes.data?.length ? uRes.data : state.users,
+      patients: pRes.data?.length ? pRes.data : state.patients,
+      appointments: aRes.data?.length ? aRes.data : state.appointments,
+      transmissions: tRes.data?.length ? tRes.data : state.transmissions
     };
 
     saveOffline();
     window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
   } catch (error: any) {
     state.dbStatus = 'error';
-    state.dbError = error.message || "Erreur réseau Supabase";
+    state.dbError = error.message;
     window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
   }
 };
 
 const loadLocalData = () => {
-  const localData = localStorage.getItem('nursebot_offline_data');
+  const localData = localStorage.getItem(OFFLINE_DATA_KEY);
   if (localData) {
-    state = { ...state, ...JSON.parse(localData) };
+    try {
+      const parsed = JSON.parse(localData);
+      // Deep merge pour éviter de perdre des réglages
+      state = { 
+        ...state, 
+        ...parsed,
+        settings: {
+          ...state.settings,
+          ...(parsed.settings || {}),
+          apiConfig: {
+            ...state.settings.apiConfig,
+            ...(parsed.settings?.apiConfig || {})
+          }
+        }
+      };
+    } catch (e) {
+      console.error("Erreur de lecture locale", e);
+    }
   } else {
-    state = {
-      ...state,
-      users: MOCK_NURSES.map(u => ({ ...u, firstName: u.name.split(' ')[0], lastName: u.name.split(' ')[1], pin: '1234', active: true })),
-      patients: MOCK_PATIENTS,
-      appointments: MOCK_APPOINTMENTS,
-      prescriptions: MOCK_PRESCRIPTIONS,
-      invoices: MOCK_INVOICES,
-      tasks: [],
-      transmissions: [
-        { id: 't1', patientId: 'demo-1', fromId: 'u2', fromName: 'Bertrand Durand', text: 'OBS: Plaie propre.\nVIGILANCE: RAS.\nACTION: Pansement refait.', category: 'clinique', priority: 'low', status: 'sent', timestamp: new Date().toISOString() }
-      ],
-      logs: [{ id: '1', action: 'Mode Démo Activé', user: 'Système', timestamp: new Date().toISOString() }]
-    };
+    state.users = MOCK_NURSES.map(u => ({ ...u, firstName: u.name.split(' ')[0], lastName: u.name.split(' ')[1], pin: '1234', active: true }));
+    state.patients = MOCK_PATIENTS;
+    state.appointments = MOCK_APPOINTMENTS;
+    state.prescriptions = MOCK_PRESCRIPTIONS;
+    state.invoices = MOCK_INVOICES;
     saveOffline();
   }
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
 const saveOffline = () => {
-  localStorage.setItem('nursebot_offline_data', JSON.stringify(state));
+  localStorage.setItem(OFFLINE_DATA_KEY, JSON.stringify(state));
 };
 
 export const getStore = () => state;
@@ -185,41 +134,47 @@ export const subscribeToStore = (callback: () => void) => {
   return () => window.removeEventListener(UPDATE_EVENT, callback);
 };
 
-export const getCurrentSession = (): UserSession | null => {
-  const session = localStorage.getItem(SESSION_KEY);
-  if (!session) return null;
-  try {
-    const parsed = JSON.parse(session);
-    if (new Date(parsed.expiresAt) < new Date()) {
-      logout();
-      return null;
-    }
-    return parsed;
-  } catch (e) {
-    return null;
+export const updateSettings = (settingsUpdate: Partial<Settings>) => {
+  // Deep merge strict
+  const newApiConfig = {
+    ...state.settings.apiConfig,
+    ...(settingsUpdate.apiConfig || {})
+  };
+
+  state.settings = { 
+    ...state.settings, 
+    ...settingsUpdate,
+    apiConfig: newApiConfig
+  };
+
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+  
+  if (settingsUpdate.apiConfig?.supabaseUrl || settingsUpdate.apiConfig?.supabaseKey) {
+    initStore();
   }
 };
 
-export const login = async (userId: string, pin: string): Promise<boolean> => {
+export const getCurrentSession = (): UserSession | null => {
+  const session = localStorage.getItem(SESSION_KEY);
+  return session ? JSON.parse(session) : null;
+};
+
+export const login = (userId: string, pin: string): boolean => {
   const user = state.users.find((u: any) => u.id === userId && u.pin === pin);
   if (user) {
-    setSession(user);
-    addLog(`Connexion de ${user.firstName}`, userId);
+    const session: UserSession = {
+      userId: user.id,
+      name: `${user.firstName} ${user.lastName}`,
+      role: user.role,
+      loginAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
     return true;
   }
   return false;
-};
-
-const setSession = (user: any) => {
-  const session: UserSession = {
-    userId: user.id,
-    name: `${user.firstName} ${user.lastName}`,
-    role: user.role as any,
-    loginAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
-  };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
 export const logout = () => {
@@ -227,13 +182,47 @@ export const logout = () => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-// ACTIONS
-export const markTransmissionReceived = (transId: string, userId: string) => {
-  state.transmissions = state.transmissions.map((t: Transmission) => 
-    t.id === transId ? { ...t, status: 'closed', acknowledgedBy: userId, acknowledgedAt: new Date().toISOString() } : t
-  );
+export const addLog = (action: string, userId: string = 'system') => {
+  const user = getCurrentSession();
+  const localLog = { id: Date.now().toString(), action, user: user?.name || 'Système', timestamp: new Date().toISOString() };
+  state.logs = [localLog, ...state.logs.slice(0, 49)];
   saveOffline();
-  addLog(`Transmission ${transId} acquittée par ${userId}`);
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const updatePatient = (patient: Patient) => {
+  state.patients = state.patients.map((p: any) => p.id === patient.id ? patient : p);
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const addTransmission = (trans: Transmission) => {
+  state.transmissions = [trans, ...state.transmissions];
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const saveStore = (newState: Partial<any>) => {
+  state = { ...state, ...newState };
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const addPrescription = (presc: Prescription) => {
+  state.prescriptions = [presc, ...state.prescriptions];
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const updateAppointment = (apt: Appointment) => {
+  state.appointments = state.appointments.map((a: any) => a.id === apt.id ? apt : a);
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const updateInvoice = (inv: PreInvoice) => {
+  state.invoices = state.invoices.map((i: any) => i.id === inv.id ? inv : i);
+  saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
@@ -244,7 +233,13 @@ export const addTask = (task: Task) => {
 };
 
 export const updateTask = (task: Task) => {
-  state.tasks = state.tasks.map((t: Task) => t.id === task.id ? task : t);
+  state.tasks = state.tasks.map((t: any) => t.id === task.id ? task : t);
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const markAlertRead = (id: string) => {
+  state.alerts = state.alerts.map((a: any) => a.id === id ? { ...a, isRead: true } : a);
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
@@ -266,85 +261,16 @@ export const addInternalMessage = (msg: any) => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const addLog = (action: string, userId: string = 'system') => {
-  const user = getCurrentSession();
-  const localLog = { id: Date.now().toString(), action, user: user?.name || 'Système', timestamp: new Date().toISOString() };
-  state.logs = [localLog, ...state.logs.slice(0, 49)];
-  saveOffline();
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-};
-
-export const saveStore = (newState: Partial<any>) => {
-  state = { ...state, ...newState };
-  saveOffline();
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-};
-
-export const updateSettings = (settingsUpdate: Partial<any>) => {
-  state.settings = { ...state.settings, ...settingsUpdate };
+export const markTransmissionReceived = (transId: string, userId: string) => {
+  state.transmissions = state.transmissions.map((t: Transmission) => 
+    t.id === transId ? { ...t, status: 'closed', acknowledgedBy: userId, acknowledgedAt: new Date().toISOString() } : t
+  );
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
 export const calculateInvoiceTotal = (acts: any[], displacement: any, majorations: any[]) => {
-  let actsTotal = acts.reduce((sum, a) => sum + a.amount, 0);
-  return actsTotal + majorations.reduce((sum, m) => sum + m.amount, 0) + (displacement?.amount || 0);
-};
-
-export const addTransmission = (trans: Transmission) => {
-  state.transmissions = [trans, ...state.transmissions];
-  saveOffline();
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-};
-
-export const addPrescription = (presc: Prescription) => {
-  state.prescriptions = [presc, ...state.prescriptions];
-  saveOffline();
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-};
-
-export const updatePatient = (patient: Patient) => {
-  state.patients = state.patients.map((p: any) => p.id === patient.id ? patient : p);
-  saveOffline();
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-};
-
-export const updateAppointment = (apt: Appointment) => {
-  state.appointments = state.appointments.map((a: any) => a.id === apt.id ? apt : a);
-  saveOffline();
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-};
-
-export const updateInvoice = (invoice: PreInvoice) => {
-  state.invoices = state.invoices.map((i: any) => i.id === invoice.id ? invoice : i);
-  saveOffline();
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-};
-
-export const markAlertRead = (id: string) => {
-  state.alerts = state.alerts.map((a: any) => a.id === id ? { ...a, isRead: true } : a);
-  saveOffline();
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-};
-
-export const handleIncomingTwilioMessage = async (payload: { From: string; Body: string }) => {
-  const { From, Body } = payload;
-  const normalizedFrom = From.replace('+33', '0').replace(/\s/g, '');
-  const patient = state.patients.find((p: Patient) => p.phone.replace(/\s/g, '') === normalizedFrom);
-  
-  if (patient) {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      patientId: patient.id,
-      direction: 'inbound',
-      text: Body,
-      timestamp: new Date().toISOString(),
-      status: 'read'
-    };
-    state.messages = [newMessage, ...state.messages];
-    saveOffline();
-    window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-    return { role: 'patient' as const, user: patient };
-  }
-  return { role: 'unknown' as const };
+  const actsTotal = acts.reduce((sum, a) => sum + (a.amount || 0), 0);
+  const majTotal = majorations.reduce((sum, m) => sum + (m.amount || 0), 0);
+  return actsTotal + majTotal + (displacement?.amount || 0);
 };

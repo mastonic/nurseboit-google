@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { processUserMessage, transcribeVoiceNote } from '../services/geminiService';
-import { getCurrentSession } from '../services/store';
+import { callNurseBotAgent } from '../services/n8nService';
+import { getCurrentSession, getStore } from '../services/store';
 
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
@@ -11,6 +11,7 @@ const ChatInterface: React.FC = () => {
   const [isTranscribing, setIsTranscribing] = useState(false);
   
   const session = getCurrentSession();
+  const store = getStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -38,23 +39,33 @@ const ChatInterface: React.FC = () => {
     setIsTyping(true);
 
     try {
-      const result = await processUserMessage(finalContent, session?.role || 'infirmiere', {});
+      // APPEL À L'AGENT N8N AVEC CONTEXTE DYNAMIQUE DU STAFF
+      const result = await callNurseBotAgent({
+        event: 'CHAT',
+        message: finalContent,
+        role: session?.role || 'infirmiere',
+        context: {
+          userName: session?.name,
+          currentDate: new Date().toISOString(),
+          cabinetStaff: store.users.filter((u:any) => u.active) // On envoie la liste réelle !
+        }
+      });
       
       const botMessage = {
         id: (Date.now() + 1).toString(),
         direction: 'inbound' as const,
-        text: result.reply,
+        text: result.output || result.reply || "L'agent n8n a traité votre demande.",
         timestamp: new Date().toISOString(),
-        intent: result.intent,
-        structuredData: result.structuredData
+        intent: result.intent || 'CHAT',
+        structuredData: result.data
       };
 
       setMessages(prev => [...prev, botMessage]);
-    } catch (error) {
+    } catch (error: any) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         direction: 'inbound',
-        text: "La passerelle VPS ne répond pas. Veuillez vérifier votre configuration n8n.",
+        text: `Erreur Agent VPS : ${error.message}`,
         timestamp: new Date().toISOString()
       }]);
     } finally {
@@ -84,9 +95,14 @@ const ChatInterface: React.FC = () => {
           const base64 = (reader.result as string).split(',')[1];
           setIsTranscribing(true);
           try {
-            const res = await transcribeVoiceNote(base64, mimeType);
-            if (res.transcription) {
-              handleSendMessage(res.transcription, true);
+            const res = await callNurseBotAgent({
+              event: 'VOCAL_PASSATION',
+              data: base64,
+              role: session?.role || 'infirmiere',
+              context: { cabinetStaff: store.users.filter((u:any) => u.active) }
+            });
+            if (res.output || res.text) {
+              handleSendMessage(res.output || res.text, true);
             }
           } catch (e) {
             console.error("Vocal error:", e);
@@ -113,7 +129,6 @@ const ChatInterface: React.FC = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-180px)] bg-white rounded-[3rem] border border-slate-100 shadow-2xl overflow-hidden animate-in fade-in duration-500 max-w-5xl mx-auto">
-      {/* Premium Header */}
       <div className="p-8 bg-slate-900 text-white flex items-center justify-between shrink-0">
         <div className="flex items-center space-x-5">
           <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-xl shadow-emerald-500/10">
@@ -122,23 +137,22 @@ const ChatInterface: React.FC = () => {
           <div>
             <h3 className="text-xl font-black tracking-tight">NurseBot Orchestrateur</h3>
             <p className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.2em] mt-1">
-               Passerelle intelligente n8n Connectée
+               Interface dynamique multi-staff
             </p>
           </div>
         </div>
         <div className="hidden md:flex items-center gap-3">
            <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping"></div>
-           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Canal VPS Sécurisé</span>
+           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prêt pour {store.users.length} infirmières</span>
         </div>
       </div>
 
-      {/* Message Feed */}
       <div ref={scrollRef} className="flex-1 p-10 space-y-8 overflow-y-auto bg-slate-50/20">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-20">
              <i className="fa-solid fa-microphone-lines text-7xl"></i>
              <p className="text-sm font-black uppercase tracking-widest max-w-xs leading-relaxed">
-                Utilisez le vocal pour enregistrer une passation ou poser une question clinique.
+                Parlez à l'agent IA. Il connaît toute l'équipe actuelle.
              </p>
           </div>
         )}
@@ -151,25 +165,11 @@ const ChatInterface: React.FC = () => {
                  ? 'bg-white text-slate-800 border border-slate-100 rounded-bl-none' 
                  : 'bg-slate-900 text-white rounded-br-none'
                }`}>
-                 {msg.type === 'voice' && (
-                    <div className="flex items-center gap-2 mb-3 text-[9px] font-black uppercase tracking-widest opacity-50">
-                       <i className="fa-solid fa-waveform"></i> Transcription Vocale VPS
-                    </div>
-                 )}
                  <p className="text-sm font-bold leading-relaxed">{msg.text}</p>
                  <p className="text-[9px] mt-4 font-black uppercase tracking-widest opacity-40 text-right">
                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                  </p>
                </div>
-               
-               {msg.direction === 'inbound' && msg.intent && (
-                  <div className="flex flex-wrap gap-2 animate-in slide-in-from-left duration-500 ml-4">
-                     <button className="px-4 py-2 bg-emerald-500 text-slate-950 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/10">
-                        {msg.intent === 'TRANSMISSION' ? 'Valider Transmission' : 'Ajouter Note Dossier'}
-                     </button>
-                     <button className="px-4 py-2 bg-slate-100 text-slate-400 rounded-xl text-[9px] font-black uppercase tracking-widest">Ignorer</button>
-                  </div>
-               )}
             </div>
           </div>
         ))}
@@ -183,14 +183,13 @@ const ChatInterface: React.FC = () => {
                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce delay-200"></div>
               </div>
               <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                {isTranscribing ? "Le VPS transcrit l'audio..." : "L'IA réfléchit..."}
+                Analyse en cours...
               </span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Input Section */}
       <div className="p-8 bg-white border-t border-slate-100">
         <div className="flex items-center gap-5 relative">
            <button 
@@ -206,14 +205,14 @@ const ChatInterface: React.FC = () => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder={isRecording ? "Enregistrement en cours..." : "Posez une question ou dictez un soin..."}
+            placeholder="Commandez le cabinet..."
             className="flex-1 bg-slate-50 border-none rounded-[1.5rem] py-5 px-8 text-sm font-black focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-inner"
            />
            
            <button 
             onClick={() => handleSendMessage()}
             disabled={!inputValue.trim()}
-            className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-xl disabled:opacity-20 active:scale-95"
+            className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-xl disabled:opacity-20"
            >
               <i className="fa-solid fa-paper-plane text-xl"></i>
            </button>

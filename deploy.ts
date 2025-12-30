@@ -4,8 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * NurseBot PRO - Script de Déploiement "Smart Docker" (Version 2.3)
- * Intègre une vérification pré-vol des variables d'environnement.
+ * NurseBot PRO - Script de Déploiement "Ultra-Stable" (Version 2.5)
  */
 
 const CONFIG = {
@@ -18,83 +17,78 @@ const CONFIG = {
 const log = (msg: string, emoji = 'ℹ️') => console.log(`${emoji} ${msg}`);
 const error = (msg: string) => {
   console.error(`\n❌ ERREUR CRITIQUE : ${msg}\n`);
-  process.exit(1);
+  // Fix: Cast process to any to access exit() when standard Process types are restricted or incomplete
+  (process as any).exit(1);
 };
 
 async function run() {
-  console.log('\n🚀 --- NurseBot PRO : Déploiement Intelligent v2.3 --- 🚀\n');
+  console.log('\n🚀 --- NurseBot PRO : Déploiement Stable v2.5 --- 🚀\n');
 
   try {
-    // 0. Vérification du fichier .env (Indispensable pour Vite)
-    log(`Vérification du fichier de configuration .env...`, '🔍');
-    const envPath = path.resolve('.env');
-    if (!fs.existsSync(envPath)) {
-      error(`Le fichier .env est INTROUVABLE dans ${process.cwd()}. 
-      Vite a besoin de ce fichier à la racine du projet pour injecter les clés Supabase.
-      Si votre fichier est à la racine du VPS, déplacez-le ici : ${process.cwd()}/.env`);
-    } else {
-      const envContent = fs.readFileSync(envPath, 'utf8');
-      if (!envContent.includes('VITE_SUPABASE_URL')) {
-        error("Le fichier .env existe mais ne contient pas la variable VITE_SUPABASE_URL.");
-      }
-      log(`Fichier .env détecté et valide.`, '✅');
-    }
+    // Fix: Cast process to any to access cwd() when standard Process types are restricted or incomplete
+    const rootDir = (process as any).cwd();
+    const distPath = path.resolve(rootDir, CONFIG.distDir);
 
-    // 1. Mise à jour Git
-    log(`Sync branche ${CONFIG.branch}...`, '🌿');
+    // 1. Nettoyage Git & Pull
+    log(`Synchronisation Git...`, '🌿');
     try {
       execSync(`git fetch origin && git reset --hard origin/${CONFIG.branch}`, { stdio: 'inherit' });
     } catch (e) {
-      log('Git reset ignoré ou échoué, utilisation des fichiers actuels.', '⚠️');
+      log('Git reset échoué, continuation...', '⚠️');
     }
 
-    // 2. Installation des dépendances
-    log('Installation des dépendances...', '📦');
-    execSync('npm install', { stdio: 'inherit' });
-
-    // 3. Build local avec injection
-    log('Génération du build production (Vite)...', '🏗️');
-    execSync('npx vite build', { 
+    // 2. Build Vite
+    log('Installation et Build...', '🏗️');
+    execSync('npm install && npx vite build', { 
       stdio: 'inherit',
       env: { ...process.env, NODE_ENV: 'production' }
     });
 
-    const distPath = path.resolve(CONFIG.distDir);
     if (!fs.existsSync(path.join(distPath, 'index.html'))) {
-      error("Le build a échoué : index.html absent du dossier 'dist'.");
+      error("Le build a échoué : index.html absent du dossier dist.");
     }
     
-    // 4. Déploiement vers Docker
-    log(`Analyse du conteneur [${CONFIG.containerName}]...`, '🔍');
+    // 3. Gestion du déploiement Docker
+    log(`Vérification du conteneur [${CONFIG.containerName}]...`, '🔍');
+    
     let hostPath = '';
     try {
       const inspect = execSync(`docker inspect ${CONFIG.containerName} --format '{{ json .Mounts }}'`).toString();
       const mounts = JSON.parse(inspect);
       const htmlMount = mounts.find((m: any) => m.Destination === CONFIG.containerTarget);
-      
-      if (htmlMount && htmlMount.Source) {
-        hostPath = htmlMount.Source;
-      }
-    } catch (e) {}
+      if (htmlMount) hostPath = htmlMount.Source;
+    } catch (e) {
+      log("Conteneur non détecté, tentative de démarrage via docker-cp...", '⚠️');
+    }
 
+    // LOGIQUE DE COPIE SÉCURISÉE
     if (hostPath) {
-      log(`Copie des fichiers vers l'hôte [${hostPath}]...`, '🚀');
-      execSync(`sudo rm -rf ${hostPath}/*`);
-      execSync(`sudo cp -rf ${distPath}/* ${hostPath}/`);
-      execSync(`sudo chown -R 33:33 ${hostPath}`); 
+      const resolvedHost = path.resolve(hostPath);
+      const resolvedDist = path.resolve(distPath);
+
+      if (resolvedHost === resolvedDist) {
+        log(`Dossiers identiques : Les fichiers sont déjà en place dans ${resolvedHost}`, '✨');
+      } else {
+        log(`Mise à jour du point de montage : ${resolvedHost}`, '🚀');
+        execSync(`sudo rm -rf ${resolvedHost}/*`);
+        execSync(`sudo cp -rf ${resolvedDist}/* ${resolvedHost}/`);
+      }
+      
+      // Réparation des droits pour Nginx (UID 33 = www-data)
+      execSync(`sudo chown -R 33:33 ${resolvedHost}`);
     } else {
-      log(`Mode secours : Docker CP...`, '📤');
+      log(`Mode Secours : Transfert manuel vers le conteneur...`, '📤');
       execSync(`docker cp ${distPath}/. ${CONFIG.containerName}:${CONFIG.containerTarget}/`);
       execSync(`docker exec ${CONFIG.containerName} chown -R 33:33 ${CONFIG.containerTarget}`);
     }
 
-    // 5. Rechargement Nginx
+    // 4. Reload Nginx
     try {
       execSync(`docker exec ${CONFIG.containerName} nginx -s reload`);
+      log('Nginx rafraîchi avec succès.', '🔄');
     } catch (e) {}
 
-    log('DÉPLOIEMENT RÉUSSI !', '✅');
-    console.log(`\n✨ NurseBot est synchronisé avec vos variables d'environnement.`);
+    log('DÉPLOIEMENT TERMINÉ AVEC SUCCÈS !', '✅');
 
   } catch (err: any) {
     error(err.message);

@@ -1,0 +1,64 @@
+
+{
+  "name": "NurseBot PRO - Orchestrateur Cabinet v5 - Dynamique",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nursebot-gateway",
+        "options": {}
+      },
+      "id": "webhook-in",
+      "name": "Webhook Gateway",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [0, 400]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Message: {{ $json.body.message }} | Staff Actuel: {{ $json.body.context.cabinetStaff }}",
+        "systemMessage": "Tu es l'intelligence centrale 'NurseBot PRO', l'orchestrateur d'un cabinet d'infirmiers libéraux (IDEL). \n\n### 👥 ÉQUIPE & CONTEXTE DYNAMIQUE :\n- Tu reçois dans chaque requête la liste actuelle du staff via la variable 'cabinetStaff'.\n- RÈGLE D'OR : Ne jamais utiliser de noms d'infirmières en dur. Utilise uniquement les noms présents dans 'cabinetStaff'.\n- Si une infirmière est mentionnée mais absente de la liste, informe l'utilisateur qu'elle n'est pas configurée dans l'onglet 'Staff'.\n\n### 🏥 MISSIONS & ROUTAGE DES ACTIONS :\n\n1. GESTION DES AGENDAS (Intent: \"PLANNING\") :\n   - Cible l'agenda de l'infirmière identifiée.\n   - Données requises : Nom de l'infirmière, Date, Heure, Type de soin.\n\n2. GESTION DRIVE (Intent: \"DRIVE_CREATE_FOLDER\") :\n   - PRIORITÉ ABSOLUE : Si un patient est nouveau ou si son 'googleDriveFolderId' est manquant, tu DOIS déclencher cet intent avant toute autre action documentaire.\n\n3. TRANSMISSIONS (Intent: \"SUPABASE_SYNC\") :\n   - Analyse les passations orales ou écrites.\n   - Structure les données en : OBSERVATIONS, VIGILANCE, ACTION.\n\n4. DISCUSSION (Intent: \"CHAT\") :\n   - Pour les questions générales sur le cabinet ou les protocoles.\n\n### 🗣️ TON & POSTURE :\n- Professionnel IDEL (Jargon : BSI, AIS, AMI, Ordonnance ALD).\n- Réponses VOCALES (Twilio) : Ultra-concises (max 15 mots).\n- Réponses TEXTES (WhatsApp) : Détaillées avec emojis pro.\n\n### 📤 FORMAT DE SORTIE (JSON STRICT) :\nRéponds EXCLUSIVEMENT sous ce format JSON :\n{\n  \"reply\": \"Ta réponse à l'infirmière\",\n  \"intent\": \"PLANNING | DRIVE_CREATE_FOLDER | SUPABASE_SYNC | CHAT\",\n  \"targetNurse\": \"Prénom de l'infirmière concernée\",\n  \"patientName\": \"Nom du patient si applicable\",\n  \"actionRequired\": true,\n  \"data\": {\n    \"date\": \"YYYY-MM-DD\",\n    \"time\": \"HH:mm\",\n    \"details\": \"Détails de l'action\"\n  }\n}"
+      },
+      "id": "ai-agent",
+      "name": "AI Orchestrator",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [400, 400]
+    },
+    {
+      "parameters": {
+        "modelName": "gemini-1.5-flash"
+      },
+      "id": "gemini-model",
+      "name": "Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [300, 600]
+    }
+  ],
+  "connections": {
+    "Webhook Gateway": {
+      "main": [
+        [
+          {
+            "node": "ai-agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "ai-agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

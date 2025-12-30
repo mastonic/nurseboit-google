@@ -26,7 +26,7 @@ export interface Transmission {
   patientId: string;
   fromId: string;
   fromName: string;
-  toId?: string; // Si spécifique, sinon cabinet
+  toId?: string; 
   toName?: string;
   text: string;
   category: 'clinique' | 'social' | 'logistique' | 'urgence';
@@ -34,18 +34,8 @@ export interface Transmission {
   status: 'draft' | 'sent' | 'received' | 'closed';
   timestamp: string;
   readAt?: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  threadId: string; // cabinet, patient-id, ou private-pair
-  authorId: string;
-  authorName: string;
-  text: string;
-  audioUrl?: string;
-  patientId?: string;
-  timestamp: string;
-  type: 'text' | 'voice' | 'system';
+  acknowledgedBy?: string;
+  acknowledgedAt?: string;
 }
 
 export interface Patient {
@@ -59,25 +49,21 @@ export interface Patient {
   email?: string;
   birthDate?: string;
   gender?: 'M' | 'F' | 'Autre';
-  nir?: string; // Numéro de sécurité sociale
+  nir?: string; 
   medecinTraitant?: string;
   contactUrgence?: string;
-  
-  // Profil médical
   careType: string;
   recurrence: string;
   pathologies?: string[];
   allergies?: string[];
   protocoles?: string;
-  notes: string; // Notes privées infirmières
-  
-  // Administratif
+  notes: string; 
   isALD: boolean;
   mutuelle?: string;
-  
+  googleDriveFolderId?: string;
   archived?: boolean;
   createdBy?: string;
-  assignedNurseIds?: string[]; // Pour le RBAC
+  assignedNurseIds?: string[];
 }
 
 export interface Appointment {
@@ -90,6 +76,7 @@ export interface Appointment {
   status: 'scheduled' | 'done' | 'cancelled';
   notes?: string;
   recurrent?: boolean;
+  googleCalendarEventId?: string;
   createdBy?: string;
 }
 
@@ -101,9 +88,7 @@ export interface Prescription {
   datePrescribed: string;
   dateExpiry: string;
   careDetails: string;
-  notes?: string;
   status: 'active' | 'expiring' | 'expired';
-  scanUrl?: string;
   createdBy?: string;
 }
 
@@ -113,11 +98,24 @@ export interface PreInvoice {
   date: string;
   acts: { code: string; label: string; amount: number }[];
   majorations: { label: string; amount: number }[];
-  displacement: { type: 'IFI' | 'IK'; distance: number; amount: number };
+  displacement: { 
+    type: 'IFI' | 'IK'; 
+    distance: number; 
+    amount: number;
+  };
   totalAmount: number;
-  status: 'to_prepare' | 'sent' | 'paid' | 'rejected';
-  rejectionReason?: string;
+  status: 'to_prepare' | 'prepared' | 'sent' | 'paid' | 'rejected';
   createdBy?: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  priority: 'low' | 'medium' | 'high';
+  deadline: string;
+  ownerId: string;
+  patientId?: string;
+  status: 'todo' | 'done';
 }
 
 export interface Message {
@@ -126,47 +124,28 @@ export interface Message {
   direction: 'inbound' | 'outbound';
   text: string;
   timestamp: string;
-  status: 'sent' | 'delivered' | 'read';
-  isUrgent?: boolean;
-}
-
-export interface Task {
-  id: string;
-  title: string;
-  ownerId: string;
-  patientId?: string;
-  deadline: string;
-  status: 'todo' | 'done';
-  priority: 'low' | 'medium' | 'high';
-  createdBy?: string;
-}
-
-export interface Alert {
-  id: string;
-  type: 'prescription' | 'billing' | 'message' | 'system' | 'transmission';
-  patientId?: string;
-  userId?: string;
-  title: string;
-  message: string;
-  date: string;
-  path: string;
-  isRead: boolean;
+  status: 'read' | 'sent' | 'received' | 'error';
 }
 
 export interface ApiConfig {
   twilioSid: string;
   twilioToken: string;
   twilioPhone: string;
+  whatsappPhone?: string;
   twilioWebhookUrl: string;
   n8nApiKey: string;
+  // Added missing properties to support Cloud synchronization and AI orchestrator
+  n8nBaseUrl?: string;
+  supabaseUrl?: string;
+  supabaseKey?: string;
   resendKey: string;
   googleCalendarSync: boolean;
 }
 
-export enum AgentType {
-  ORCHESTRATOR = 'ORCHESTRATOR',
-  PLANNING = 'PLANNING',
-  PRESCRIPTION = 'PRESCRIPTION',
-  BILLING = 'BILLING',
-  TRANSMISSION = 'TRANSMISSION'
+export interface Settings {
+  cabinetName: string;
+  workingHoursStart: string;
+  workingHoursEnd: string;
+  defaultCareDuration: number;
+  apiConfig: ApiConfig;
 }
