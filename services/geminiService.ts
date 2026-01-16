@@ -32,7 +32,7 @@ export const transcribeVoiceNote = async (base64Audio: string, mimeType: string 
   const genAI = getAiClient();
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash-exp",
       contents: [{
         role: "user",
         parts: [
@@ -52,7 +52,7 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
   const genAI = getAiClient();
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash-exp",
       contents: [{
         role: "user",
         parts: [
@@ -85,7 +85,7 @@ export const transcribeMeeting = async (text: string) => {
   const genAI = getAiClient();
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash-exp",
       contents: [{
         role: "user",
         parts: [{ text: `Synthétise cette réunion : ${text}` }]
