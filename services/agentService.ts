@@ -21,7 +21,7 @@ export const agentService = {
         if (isVoice && input instanceof Blob) {
             // 1. Transcription phase
             const base64 = await this.blobToBase64(input);
-            const res = await transcribeVoiceNote(base64);
+            const res = await transcribeVoiceNote(base64, input.type); // Pass MIME type
             textCommand = typeof res === 'string' ? res : res.transcription;
         } else {
             textCommand = input as string;

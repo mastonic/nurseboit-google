@@ -36,7 +36,7 @@ export const transcribeVoiceNote = async (base64Audio: string, mimeType: string 
       contents: [{
         role: "user",
         parts: [
-          { inlineData: { data: base64Audio, mimeType } },
+          { inlineData: { data: base64Audio, mimeType } }, // Use dynamic mimeType
           { text: "Transcris cette transmission. Sois précis sur les constantes médicales." }
         ]
       }]
