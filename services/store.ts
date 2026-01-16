@@ -19,12 +19,20 @@ const toCamel = (obj: any): any => {
 const toSnake = (obj: any): any => {
   if (!obj || typeof obj !== 'object' || obj instanceof Date) return obj;
   if (Array.isArray(obj)) return obj.map(toSnake);
-  return Object.keys(obj).reduce((acc: any, key) => {
+
+  const result = Object.keys(obj).reduce((acc: any, key) => {
     // Handle special case isALD -> is_ald
     let snakeKey = key === 'isALD' ? 'is_ald' : key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
     acc[snakeKey] = toSnake(obj[key]);
+
+    // SPECIAL: Duplicate firstName/lastName as prenom/nom for French DB columns
+    if (key === 'firstName') acc['prenom'] = obj[key];
+    if (key === 'lastName') acc['nom'] = obj[key];
+
     return acc;
   }, {});
+
+  return result;
 };
 
 const SESSION_KEY = 'nursebot_session';
