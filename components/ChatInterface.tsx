@@ -174,11 +174,10 @@ const ChatInterface: React.FC = () => {
       <div className="p-8 bg-white border-t border-slate-100">
         <div className="flex items-center gap-5 relative">
           <button
-            onMouseDown={startRecording}
-            onMouseUp={stopRecording}
+            onClick={isRecording ? stopRecording : startRecording}
             className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse shadow-xl' : 'bg-slate-100 text-slate-400 hover:bg-emerald-500 hover:text-slate-950 shadow-inner'}`}
           >
-            <i className="fa-solid fa-microphone text-xl"></i>
+            <i className={`fa-solid ${isRecording ? 'fa-stop' : 'fa-microphone'} text-xl`}></i>
           </button>
 
           <input

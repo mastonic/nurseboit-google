@@ -5,6 +5,7 @@ import {
     updatePatient,
     addTransmission,
     updateAppointment,
+    addPatient, // Ensure this is imported
     getCurrentSession
 } from './store';
 import { transcribeVoiceNote } from './geminiService';
@@ -45,7 +46,7 @@ export const agentService = {
             if (intent === 'CREATE_PATIENT' && metadata.admin?.patientData) {
                 const data = metadata.admin.patientData;
                 const newPatient: Patient = {
-                    id: `p-${Date.now()}`,
+                    id: crypto.randomUUID(),
                     firstName: data.firstName || 'Inconnu',
                     lastName: data.lastName || 'Patient',
                     phone: data.phone || '',
@@ -56,7 +57,7 @@ export const agentService = {
                     isALD: false,
                     assignedNurseIds: session ? [session.userId] : []
                 };
-                await updatePatient(newPatient);
+                await addPatient(newPatient);
                 actionFeedback = `✅ Patient ${newPatient.lastName} créé.`;
             }
             else if (intent === 'CREATE_TRANSMISSION' && metadata.medical?.transmissionData) {
@@ -72,7 +73,7 @@ export const agentService = {
                 }
 
                 const newTrans: Transmission = {
-                    id: `t-${Date.now()}`,
+                    id: crypto.randomUUID(),
                     patientId: targetId || 'unknown',
                     fromId: session?.userId || 'system',
                     fromName: session?.name || 'NurseBot AI',
@@ -88,7 +89,7 @@ export const agentService = {
             else if (intent === 'CREATE_APPOINTMENT' && metadata.admin?.appointmentData) {
                 const data = metadata.admin.appointmentData;
                 const newApt: Appointment = {
-                    id: `a-${Date.now()}`,
+                    id: crypto.randomUUID(),
                     patientId: data.patientId || context.store.patients[0]?.id,
                     nurseId: session?.userId || 'u1',
                     dateTime: data.dateTime || new Date().toISOString(),
