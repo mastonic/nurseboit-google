@@ -27,7 +27,7 @@ export interface Transmission {
   patientId: string;
   fromId: string;
   fromName: string;
-  toId?: string; 
+  toId?: string;
   toName?: string;
   text: string;
   category: 'clinique' | 'social' | 'logistique' | 'urgence';
@@ -51,7 +51,7 @@ export interface Patient {
   email?: string;
   birthDate?: string;
   gender?: 'M' | 'F' | 'Autre';
-  nir?: string; 
+  nir?: string;
   medecinTraitant?: string;
   contactUrgence?: string;
   careType: string;
@@ -59,10 +59,11 @@ export interface Patient {
   pathologies?: string[];
   allergies?: string[];
   protocoles?: string;
-  notes: string; 
+  notes: string;
   isALD: boolean;
   mutuelle?: string;
   googleDriveFolderId?: string;
+  documents?: { id: string; name: string; type: string; url: string; date: string }[];
   archived?: boolean;
   createdBy?: string;
   assignedNurseIds?: string[];
@@ -92,6 +93,7 @@ export interface Prescription {
   datePrescribed: string;
   dateExpiry: string;
   careDetails: string;
+  imageUrl?: string;
   status: 'active' | 'expiring' | 'expired';
   createdBy?: string;
 }
@@ -102,9 +104,9 @@ export interface PreInvoice {
   date: string;
   acts: { code: string; label: string; amount: number }[];
   majorations: { label: string; amount: number }[];
-  displacement: { 
-    type: 'IFI' | 'IK'; 
-    distance: number; 
+  displacement: {
+    type: 'IFI' | 'IK';
+    distance: number;
     amount: number;
   };
   totalAmount: number;

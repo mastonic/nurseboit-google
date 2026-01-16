@@ -9,96 +9,66 @@ import { getStore } from "./store";
  */
 
 const getAiClient = () => {
-  // Always use process.env.API_KEY directly for initialization.
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 };
 
+import { masterAgent } from "./agents/masterAgent";
+
 export const processUserMessage = async (message: string, role: Role, context: any) => {
-  const ai = getAiClient();
-  // Extraction des noms du staff pour l'IA
-  const staffNames = context.cabinetStaff ? context.cabinetStaff.map((u: any) => u.firstName).join(', ') : "Alice, Bertrand, Carine";
-
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: message,
-      config: {
-        systemInstruction: `Tu es NurseBot PRO, l'IA orchestratrice du cabinet.
-        
-        STAFF ACTUEL : ${staffNames}.
-        
-        RÈGLES D'IDENTIFICATION :
-        - Identifie l'infirmière concernée parmi la liste ci-dessus.
-        - Si un nouveau membre est mentionné mais absent de la liste, suggère de le créer dans l'onglet 'Staff'.
-        
-        LOGIQUE DRIVE : 
-        Si context.patient.googleDriveFolderId est manquant, ton intention PRIORITAIRE est 'DRIVE_CREATE_FOLDER'.
-        
-        LOGIQUE RÉPONSE :
-        Adapte le ton : Vocal (Twilio) = Très court / Texte (WhatsApp) = Détaillé.`,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            reply: { type: Type.STRING },
-            intent: { type: Type.STRING, description: "CHAT|PLANNING|DRIVE_CREATE_FOLDER|SUPABASE_SYNC" },
-            targetNurse: { type: Type.STRING, description: "Nom de l'infirmière identifiée dans la liste" },
-            actionRequired: { type: Type.BOOLEAN }
-          },
-          required: ['reply', 'intent', 'actionRequired']
-        }
-      }
-    });
-
-    return JSON.parse(response.text || "{}");
+    return await masterAgent.execute(message, context);
   } catch (error) {
     console.error("Gemini processUserMessage error:", error);
-    return { 
-      reply: "L'orchestrateur rencontre une difficulté de synchronisation.", 
-      intent: "CHAT", 
-      actionRequired: false 
+    return {
+      reply: "L'orchestrateur BMAD rencontre une difficulté de synchronisation.",
+      intent: "CHAT",
+      actionRequired: false,
+      metadata: {}
     };
   }
 };
 
 export const transcribeVoiceNote = async (base64Audio: string, mimeType: string = "audio/webm") => {
-  const ai = getAiClient();
+  const genAI = getAiClient();
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-native-audio-preview-09-2025',
-      contents: {
+    const response = await genAI.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [{
+        role: "user",
         parts: [
           { inlineData: { data: base64Audio, mimeType } },
           { text: "Transcris cette transmission. Sois précis sur les constantes médicales." }
         ]
-      }
+      }]
     });
     return { transcription: response.text };
   } catch (error) {
+    console.error("Transcription error:", error);
     return { transcription: "[Erreur de transcription]" };
   }
 };
 
 export const analyzePrescriptionOCR = async (base64Image: string) => {
-  const ai = getAiClient();
+  const genAI = getAiClient();
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: {
+    const response = await genAI.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [{
+        role: "user",
         parts: [
           { inlineData: { data: base64Image, mimeType: 'image/png' } },
           { text: "Extrais les données de l'ordonnance." }
         ]
-      },
+      }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            prescriber: { type: Type.STRING },
-            datePrescribed: { type: Type.STRING },
-            careDetails: { type: Type.STRING },
-            patientName: { type: Type.STRING }
+            prescriber: { type: "STRING" },
+            datePrescribed: { type: "STRING" },
+            careDetails: { type: "STRING" },
+            patientName: { type: "STRING" }
           },
           required: ['prescriber', 'careDetails']
         }
@@ -106,30 +76,34 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
     });
     return JSON.parse(response.text || "{}");
   } catch (error) {
+    console.error("OCR error:", error);
     return {};
   }
 };
 
 export const transcribeMeeting = async (text: string) => {
-  const ai = getAiClient();
+  const genAI = getAiClient();
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: `Synthétise cette réunion : ${text}`,
+    const response = await genAI.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [{
+        role: "user",
+        parts: [{ text: `Synthétise cette réunion : ${text}` }]
+      }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            decisions: { type: Type.ARRAY, items: { type: Type.STRING } },
+            decisions: { type: "ARRAY", items: { type: "STRING" } },
             tasks: {
-              type: Type.ARRAY,
+              type: "ARRAY",
               items: {
-                type: Type.OBJECT,
+                type: "OBJECT",
                 properties: {
-                  title: { type: Type.STRING },
-                  owner: { type: Type.STRING },
-                  deadline: { type: Type.STRING }
+                  title: { type: "STRING" },
+                  owner: { type: "STRING" },
+                  deadline: { type: "STRING" }
                 }
               }
             }
@@ -139,6 +113,20 @@ export const transcribeMeeting = async (text: string) => {
     });
     return JSON.parse(response.text || '{"decisions":[], "tasks":[]}');
   } catch (error) {
+    console.error("Meeting synthesis error:", error);
     return { decisions: [], tasks: [] };
+  }
+};
+
+export const checkGeminiConnection = async () => {
+  const ai = getAiClient();
+  try {
+    await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [{ role: 'user', parts: [{ text: "ping" }] }]
+    });
+    return { status: 'ok' as const, msg: 'Gemini API Connecté (Flash 1.5)' };
+  } catch (error: any) {
+    return { status: 'error' as const, msg: `Gemini Error: ${error.message}` };
   }
 };

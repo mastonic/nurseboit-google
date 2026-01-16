@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { callNurseBotAgent } from '../services/n8nService';
 import { getCurrentSession, getStore } from '../services/store';
+import { agentService } from '../services/agentService';
 import AudioVisualizer from './AudioVisualizer';
 
 const ChatInterface: React.FC = () => {
@@ -11,7 +12,7 @@ const ChatInterface: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingStream, setRecordingStream] = useState<MediaStream | null>(null);
-  
+
   const session = getCurrentSession();
   const store = getStore();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -24,14 +25,14 @@ const ChatInterface: React.FC = () => {
     }
   }, [messages, isTyping, isTranscribing]);
 
-  const handleSendMessage = async (text?: string, isVoice: boolean = false) => {
-    const finalContent = text || inputValue;
-    if (!finalContent.trim()) return;
+  const handleSendMessage = async (textCommand?: string, isVoice: boolean = false, audioBlob?: Blob) => {
+    const finalContent = textCommand || inputValue;
+    if (!finalContent && !audioBlob) return;
 
     const userMessage = {
       id: Date.now().toString(),
       direction: 'outbound' as const,
-      text: finalContent,
+      text: finalContent || "(Audio command)",
       timestamp: new Date().toISOString(),
       type: isVoice ? 'voice' : 'text',
     };
@@ -41,24 +42,14 @@ const ChatInterface: React.FC = () => {
     setIsTyping(true);
 
     try {
-      const result = await callNurseBotAgent({
-        event: 'CHAT',
-        message: finalContent,
-        role: session?.role || 'infirmiere',
-        context: {
-          userName: session?.name,
-          currentDate: new Date().toISOString(),
-          cabinetStaff: store.users.filter((u:any) => u.active)
-        }
-      });
-      
+      const result = await agentService.processCommand(audioBlob || finalContent, !!audioBlob);
+
       const botMessage = {
         id: (Date.now() + 1).toString(),
         direction: 'inbound' as const,
-        text: result.output || result.reply || "L'agent n8n a traité votre demande.",
+        text: result.feedback ? `${result.feedback}\n\n${result.reply}` : result.reply,
         timestamp: new Date().toISOString(),
-        intent: result.intent || 'CHAT',
-        structuredData: result.data
+        intent: result.raw.intent,
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -66,7 +57,7 @@ const ChatInterface: React.FC = () => {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         direction: 'inbound',
-        text: `Erreur Agent VPS : ${error.message}`,
+        text: `Désolé, j'ai rencontré une erreur : ${error.message}`,
         timestamp: new Date().toISOString()
       }]);
     } finally {
@@ -91,27 +82,10 @@ const ChatInterface: React.FC = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         if (audioBlob.size < 1000) return;
 
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = async () => {
-          const base64 = (reader.result as string).split(',')[1];
-          setIsTranscribing(true);
-          try {
-            const res = await callNurseBotAgent({
-              event: 'VOCAL_PASSATION',
-              data: base64,
-              role: session?.role || 'infirmiere',
-              context: { cabinetStaff: store.users.filter((u:any) => u.active) }
-            });
-            if (res.output || res.text) {
-              handleSendMessage(res.output || res.text, true);
-            }
-          } catch (e) {
-            console.error("Vocal error:", e);
-          } finally {
-            setIsTranscribing(false);
-          }
-        };
+        setIsTranscribing(true);
+        handleSendMessage(undefined, true, audioBlob);
+        setIsTranscribing(false);
+
         stream.getTracks().forEach(t => t.stop());
         setRecordingStream(null);
       };
@@ -140,44 +114,43 @@ const ChatInterface: React.FC = () => {
           <div>
             <h3 className="text-xl font-black tracking-tight">NurseBot Orchestrateur</h3>
             <p className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.2em] mt-1">
-               Interface dynamique multi-staff
+              Interface dynamique multi-staff
             </p>
           </div>
         </div>
         <div className="hidden md:flex items-center gap-4">
-           {isRecording && (
-             <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-2xl">
-                <AudioVisualizer stream={recordingStream} isRecording={isRecording} />
-                <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse"></span>
-             </div>
-           )}
-           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prêt pour {store.users.length} infirmières</span>
+          {isRecording && (
+            <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-2xl">
+              <AudioVisualizer stream={recordingStream} isRecording={isRecording} />
+              <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse"></span>
+            </div>
+          )}
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prêt pour {store.users.length} infirmières</span>
         </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 p-10 space-y-8 overflow-y-auto bg-slate-50/20">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-20">
-             <i className="fa-solid fa-microphone-lines text-7xl"></i>
-             <p className="text-sm font-black uppercase tracking-widest max-w-xs leading-relaxed">
-                Parlez à l'agent IA. Il connaît toute l'équipe actuelle.
-             </p>
+            <i className="fa-solid fa-microphone-lines text-7xl"></i>
+            <p className="text-sm font-black uppercase tracking-widest max-w-xs leading-relaxed">
+              Parlez à l'agent IA. Il connaît toute l'équipe actuelle.
+            </p>
           </div>
         )}
-        
+
         {messages.map((msg) => (
           <div key={msg.id} className={`flex ${msg.direction === 'inbound' ? 'justify-start' : 'justify-end'}`}>
             <div className="max-w-[85%] space-y-2">
-               <div className={`p-6 rounded-[2.5rem] shadow-xl relative ${
-                 msg.direction === 'inbound' 
-                 ? 'bg-white text-slate-800 border border-slate-100 rounded-bl-none' 
-                 : 'bg-slate-900 text-white rounded-br-none'
-               }`}>
-                 <p className="text-sm font-bold leading-relaxed">{msg.text}</p>
-                 <p className="text-[9px] mt-4 font-black uppercase tracking-widest opacity-40 text-right">
-                   {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                 </p>
-               </div>
+              <div className={`p-6 rounded-[2.5rem] shadow-xl relative ${msg.direction === 'inbound'
+                ? 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'
+                : 'bg-slate-900 text-white rounded-br-none'
+                }`}>
+                <p className="text-sm font-bold leading-relaxed">{msg.text}</p>
+                <p className="text-[9px] mt-4 font-black uppercase tracking-widest opacity-40 text-right">
+                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
             </div>
           </div>
         ))}
@@ -200,30 +173,30 @@ const ChatInterface: React.FC = () => {
 
       <div className="p-8 bg-white border-t border-slate-100">
         <div className="flex items-center gap-5 relative">
-           <button 
-             onMouseDown={startRecording}
-             onMouseUp={stopRecording}
-             className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse shadow-xl' : 'bg-slate-100 text-slate-400 hover:bg-emerald-500 hover:text-slate-950 shadow-inner'}`}
-           >
-              <i className="fa-solid fa-microphone text-xl"></i>
-           </button>
-           
-           <input 
-            type="text" 
+          <button
+            onMouseDown={startRecording}
+            onMouseUp={stopRecording}
+            className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse shadow-xl' : 'bg-slate-100 text-slate-400 hover:bg-emerald-500 hover:text-slate-950 shadow-inner'}`}
+          >
+            <i className="fa-solid fa-microphone text-xl"></i>
+          </button>
+
+          <input
+            type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="Commandez le cabinet..."
             className="flex-1 bg-slate-50 border-none rounded-[1.5rem] py-5 px-8 text-sm font-black focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-inner"
-           />
-           
-           <button 
+          />
+
+          <button
             onClick={() => handleSendMessage()}
             disabled={!inputValue.trim()}
             className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-xl disabled:opacity-20"
-           >
-              <i className="fa-solid fa-paper-plane text-xl"></i>
-           </button>
+          >
+            <i className="fa-solid fa-paper-plane text-xl"></i>
+          </button>
         </div>
       </div>
     </div>

@@ -219,14 +219,22 @@ export const addLog = (action: string, userId: string = 'system') => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const updatePatient = (patient: Patient) => {
+export const updatePatient = async (patient: Patient) => {
   state.patients = state.patients.map((p: any) => p.id === patient.id ? patient : p);
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('patients').upsert(patient);
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const addTransmission = (trans: Transmission) => {
+export const addTransmission = async (trans: Transmission) => {
   state.transmissions = [trans, ...state.transmissions];
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('transmissions').insert(trans);
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
@@ -237,16 +245,25 @@ export const saveStore = (newState: Partial<any>) => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const updateAppointment = (apt: Appointment) => {
+export const updateAppointment = async (apt: Appointment) => {
   state.appointments = state.appointments.map((a: any) => a.id === apt.id ? apt : a);
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('appointments').upsert(apt);
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const markTransmissionReceived = (transId: string, userId: string) => {
-  state.transmissions = state.transmissions.map((t: Transmission) => 
-    t.id === transId ? { ...t, status: 'closed', acknowledgedBy: userId, acknowledgedAt: new Date().toISOString() } : t
+export const markTransmissionReceived = async (transId: string, userId: string) => {
+  const acknowledgedAt = new Date().toISOString();
+  state.transmissions = state.transmissions.map((t: Transmission) =>
+    t.id === transId ? { ...t, status: 'closed', acknowledgedBy: userId, acknowledgedAt } : t
   );
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('transmissions').update({ status: 'closed', acknowledged_by: userId, acknowledged_at: acknowledgedAt }).eq('id', transId);
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
@@ -257,9 +274,13 @@ export const addInternalMessage = (msg: any) => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const upsertUser = (user: User) => {
+export const upsertUser = async (user: User) => {
   const exists = state.users.some((u: User) => u.id === user.id);
   state.users = exists ? state.users.map((u: User) => u.id === user.id ? user : u) : [...state.users, user];
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('users').upsert(user);
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
@@ -272,22 +293,32 @@ export const setExternalEvents = (events: any[]) => {
 };
 
 // Fix for missing addPrescription
-export const addPrescription = (presc: Prescription) => {
+export const addPrescription = async (presc: Prescription) => {
   state.prescriptions = [presc, ...state.prescriptions];
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('prescriptions').insert(presc);
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-// Fix for missing addTask
-export const addTask = (task: Task) => {
+export const addTask = async (task: Task) => {
   state.tasks = [task, ...state.tasks];
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('tasks').insert(task);
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-// Fix for missing updateTask
-export const updateTask = (task: Task) => {
+export const updateTask = async (task: Task) => {
   state.tasks = state.tasks.map((t: Task) => t.id === task.id ? task : t);
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('tasks').upsert(task);
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
