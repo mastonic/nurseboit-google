@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStore, addLog, saveStore, updatePatient, subscribeToStore, getCurrentSession } from '../services/store';
+import { getStore, addLog, updatePatient, subscribeToStore, getCurrentSession, addPatient } from '../services/store';
 import { Patient, User } from '../types';
 
 const PatientsView: React.FC = () => {
@@ -66,10 +66,11 @@ const PatientsView: React.FC = () => {
       if (modalMode === 'add') {
          const newPatient: Patient = {
             ...patientData as Patient,
-            id: `p-${Date.now()}`,
+            id: crypto.randomUUID(),
             createdBy: session.userId,
          };
-         saveStore({ patients: [...store.patients, newPatient] });
+         addPatient(newPatient);
+         // saveStore({ patients: [...store.patients, newPatient] }); // Remplace par addPatient
          addLog(`Nouveau patient créé: ${newPatient.lastName}`, session.userId);
       } else if (modalMode === 'edit' && selectedPatient) {
          const updated = { ...selectedPatient, ...patientData };

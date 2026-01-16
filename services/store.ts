@@ -12,17 +12,19 @@ const toCamel = (obj: any): any => {
     let camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
     if (camelKey === 'isAld') camelKey = 'isALD';
 
-    const value = toCamel(obj[key]);
-    acc[camelKey] = value;
+    // Explicit mappings for standard schema
+    if (key === 'birth_date') camelKey = 'birthDate';
+    if (key === 'zip_code') camelKey = 'zipCode';
+    if (key === 'medecin_traitant') camelKey = 'medecinTraitant';
+    if (key === 'contact_urgence') camelKey = 'contactUrgence';
+    if (key === 'care_type') camelKey = 'careType';
+    if (key === 'is_ald') camelKey = 'isALD';
+    if (key === 'google_drive_folder_id') camelKey = 'googleDriveFolderId';
+    if (key === 'created_by') camelKey = 'createdBy';
+    if (key === 'assigned_nurse_ids') camelKey = 'assignedNurseIds';
+    if (key === 'is_demo') camelKey = 'isDemo';
 
-    // Polyfill for French DB columns if English prop is missing/null
-    if (key === 'nom' && !acc['lastName']) acc['lastName'] = value;
-    if (key === 'prenom' && !acc['firstName']) acc['firstName'] = value;
-    if (key === 'telephone' && !acc['phone']) acc['phone'] = value;
-    if (key === 'adresse' && !acc['address']) acc['address'] = value;
-    if (key === 'type_soin' && !acc['careType']) acc['careType'] = value;
-    if (key === 'nurse_assigned' && !acc['assignedNurseIds']) acc['assignedNurseIds'] = value ? [value] : [];
-
+    acc[camelKey] = toCamel(obj[key]);
     return acc;
   }, {});
 };
@@ -33,20 +35,21 @@ const toSnake = (obj: any): any => {
   if (Array.isArray(obj)) return obj.map(toSnake);
 
   return Object.keys(obj).reduce((acc: any, key) => {
-    // Handle special case isALD -> is_ald
-    let snakeKey = key === 'isALD' ? 'is_ald' : key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+    let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
-    const value = toSnake(obj[key]);
-    acc[snakeKey] = value;
+    // Explicit mappings for standard schema
+    if (key === 'birthDate') snakeKey = 'birth_date';
+    if (key === 'zipCode') snakeKey = 'zip_code';
+    if (key === 'medecinTraitant') snakeKey = 'medecin_traitant';
+    if (key === 'contactUrgence') snakeKey = 'contact_urgence';
+    if (key === 'careType') snakeKey = 'care_type';
+    if (key === 'isALD') snakeKey = 'is_ald';
+    if (key === 'googleDriveFolderId') snakeKey = 'google_drive_folder_id';
+    if (key === 'createdBy') snakeKey = 'created_by';
+    if (key === 'assignedNurseIds') snakeKey = 'assigned_nurse_ids';
+    if (key === 'isDemo') snakeKey = 'is_demo';
 
-    // Duplicate fields for French/English dual columns
-    if (key === 'firstName') { acc['prenom'] = value; acc['first_name'] = value; }
-    if (key === 'lastName') { acc['nom'] = value; acc['last_name'] = value; }
-    if (key === 'phone') { acc['telephone'] = value; }
-    if (key === 'address') { acc['adresse'] = value; }
-    if (key === 'careType') { acc['type_soin'] = value; }
-    if (key === 'assignedNurseIds') { acc['nurse_assigned'] = Array.isArray(value) ? value[0] : value; }
-
+    acc[snakeKey] = toSnake(obj[key]);
     return acc;
   }, {});
 };
@@ -284,6 +287,16 @@ export const updatePatient = async (patient: Patient) => {
   const supabase = getSupabaseClient();
   if (supabase) {
     await supabase.from('patients').upsert(toSnake(patient));
+  }
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const addPatient = async (patient: Patient) => {
+  state.patients = [...state.patients, patient];
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('patients').insert(toSnake(patient));
   }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
