@@ -302,6 +302,16 @@ export const addPatient = async (patient: Patient) => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
+export const deletePatient = async (patientId: string) => {
+  state.patients = state.patients.filter((p: Patient) => p.id !== patientId);
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('patients').delete().eq('id', patientId);
+  }
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
 export const addTransmission = async (trans: Transmission) => {
   state.transmissions = [trans, ...state.transmissions];
   const supabase = getSupabaseClient();

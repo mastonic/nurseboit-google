@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStore, addLog, updatePatient, subscribeToStore, getCurrentSession, addPatient } from '../services/store';
+import { getStore, addLog, updatePatient, subscribeToStore, getCurrentSession, addPatient, deletePatient } from '../services/store';
 import { Patient, User } from '../types';
 
 const PatientsView: React.FC = () => {
@@ -78,6 +78,14 @@ const PatientsView: React.FC = () => {
          addLog(`Patient mis à jour: ${updated.lastName}`, session.userId);
       }
       setModalMode(null);
+   };
+
+   const handleDelete = () => {
+      if (selectedPatient && window.confirm('Êtes-vous sûr de vouloir supprimer définitivement ce dossier patient ?')) {
+         deletePatient(selectedPatient.id);
+         addLog(`Patient supprimé: ${selectedPatient.lastName}`, session?.userId || 'system');
+         setModalMode(null);
+      }
    };
 
    return (
@@ -286,6 +294,11 @@ const PatientsView: React.FC = () => {
                   </div>
 
                   <div className="p-8 bg-slate-50 border-t border-slate-100 flex gap-4">
+                     {modalMode === 'edit' && (
+                        <button type="button" onClick={handleDelete} className="flex-1 py-4 bg-rose-50 text-rose-500 rounded-2xl font-black uppercase tracking-widest text-[10px] border border-rose-100 hover:bg-rose-500 hover:text-white transition-all mr-4">
+                           <i className="fa-solid fa-trash mr-2"></i> Supprimer
+                        </button>
+                     )}
                      <button type="button" onClick={() => setModalMode(null)} className="flex-1 py-4 bg-white text-slate-400 rounded-2xl font-black uppercase tracking-widest text-[10px] border border-slate-200 hover:bg-slate-50 transition-all">Annuler</button>
                      <button type="submit" className="flex-[2] py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-emerald-500 hover:text-slate-950 transition-all">
                         {modalMode === 'add' ? 'Créer le dossier' : 'Enregistrer les modifications'}
