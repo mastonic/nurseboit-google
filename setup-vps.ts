@@ -9,7 +9,7 @@ import * as fs from 'fs';
 
 const APP_PATH = "/opt/nursebot/app";
 const DOMAIN = "nursebot.srv1146904.hstgr.cloud";
-const PORT_LOCAL = "8080";
+const PORT_LOCAL = "8081";
 
 const log = (msg: string, emoji = '🚀') => console.log(`\n${emoji} ${msg}`);
 const cmd = (command: string) => {
