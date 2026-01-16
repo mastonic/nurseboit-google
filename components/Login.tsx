@@ -49,14 +49,14 @@ const Login: React.FC = () => {
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Utilisateur</label>
             <div className="grid grid-cols-1 gap-2">
-              {users.filter(u => u.active).map(u => (
+              {users.filter(u => u.active !== false).map(u => (
                 <button
                   key={u.id}
                   type="button"
                   onClick={() => setSelectedUserId(u.id)}
                   className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all ${selectedUserId === u.id
-                      ? 'border-emerald-500 bg-emerald-50'
-                      : 'border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-200'
+                    ? 'border-emerald-500 bg-emerald-50'
+                    : 'border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-200'
                     }`}
                 >
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black ${selectedUserId === u.id ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'

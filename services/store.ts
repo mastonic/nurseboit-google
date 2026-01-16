@@ -2,6 +2,31 @@
 import { Patient, Appointment, Prescription, PreInvoice, UserSession, Transmission, Task, User, Settings } from '../types';
 import { createClient } from '@supabase/supabase-js';
 
+// Helper to convert snake_case (DB) to camelCase (App)
+const toCamel = (obj: any): any => {
+  if (!obj || typeof obj !== 'object' || obj instanceof Date) return obj;
+  if (Array.isArray(obj)) return obj.map(toCamel);
+  return Object.keys(obj).reduce((acc: any, key) => {
+    // Handle special case is_ald -> isALD
+    let camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+    if (camelKey === 'isAld') camelKey = 'isALD';
+    acc[camelKey] = toCamel(obj[key]);
+    return acc;
+  }, {});
+};
+
+// Helper to convert camelCase (App) to snake_case (DB)
+const toSnake = (obj: any): any => {
+  if (!obj || typeof obj !== 'object' || obj instanceof Date) return obj;
+  if (Array.isArray(obj)) return obj.map(toSnake);
+  return Object.keys(obj).reduce((acc: any, key) => {
+    // Handle special case isALD -> is_ald
+    let snakeKey = key === 'isALD' ? 'is_ald' : key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+    acc[snakeKey] = toSnake(obj[key]);
+    return acc;
+  }, {});
+};
+
 const SESSION_KEY = 'nursebot_session';
 const OFFLINE_DATA_KEY = 'nursebot_offline_data';
 const UPDATE_EVENT = 'nursebot-store-update';
@@ -141,13 +166,19 @@ export const initStore = async () => {
       supabase.from('appointments').select('*'),
       supabase.from('transmissions').select('*').order('timestamp', { ascending: false })
     ]);
+
+    const users = toCamel(uRes.data || []);
+    const patients = toCamel(pRes.data || []);
+    const appointments = toCamel(aRes.data || []);
+    const transmissions = toCamel(tRes.data || []);
+
     state = {
       ...state,
       dbStatus: 'connected',
-      users: uRes.data?.length ? uRes.data : state.users,
-      patients: pRes.data?.length ? pRes.data : state.patients,
-      appointments: aRes.data?.length ? aRes.data : state.appointments,
-      transmissions: tRes.data?.length ? tRes.data : state.transmissions
+      users: users.length ? users : state.users,
+      patients: patients.length ? patients : state.patients,
+      appointments: appointments.length ? appointments : state.appointments,
+      transmissions: transmissions.length ? transmissions : state.transmissions
     };
     saveOffline();
     window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
@@ -223,7 +254,7 @@ export const updatePatient = async (patient: Patient) => {
   state.patients = state.patients.map((p: any) => p.id === patient.id ? patient : p);
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.from('patients').upsert(patient);
+    await supabase.from('patients').upsert(toSnake(patient));
   }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
@@ -233,7 +264,7 @@ export const addTransmission = async (trans: Transmission) => {
   state.transmissions = [trans, ...state.transmissions];
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.from('transmissions').insert(trans);
+    await supabase.from('transmissions').insert(toSnake(trans));
   }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
@@ -249,7 +280,7 @@ export const updateAppointment = async (apt: Appointment) => {
   state.appointments = state.appointments.map((a: any) => a.id === apt.id ? apt : a);
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.from('appointments').upsert(apt);
+    await supabase.from('appointments').upsert(toSnake(apt));
   }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
@@ -279,7 +310,7 @@ export const upsertUser = async (user: User) => {
   state.users = exists ? state.users.map((u: User) => u.id === user.id ? user : u) : [...state.users, user];
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.from('users').upsert(user);
+    await supabase.from('users').upsert(toSnake(user));
   }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
@@ -297,7 +328,7 @@ export const addPrescription = async (presc: Prescription) => {
   state.prescriptions = [presc, ...state.prescriptions];
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.from('prescriptions').insert(presc);
+    await supabase.from('prescriptions').insert(toSnake(presc));
   }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
@@ -307,7 +338,7 @@ export const addTask = async (task: Task) => {
   state.tasks = [task, ...state.tasks];
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.from('tasks').insert(task);
+    await supabase.from('tasks').insert(toSnake(task));
   }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
@@ -317,7 +348,7 @@ export const updateTask = async (task: Task) => {
   state.tasks = state.tasks.map((t: Task) => t.id === task.id ? task : t);
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.from('tasks').upsert(task);
+    await supabase.from('tasks').upsert(toSnake(task));
   }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
