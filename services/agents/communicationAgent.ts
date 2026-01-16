@@ -17,7 +17,13 @@ export const communicationAgent = {
         properties: {
             finalReply: { type: "STRING" },
             channelToneApplied: { type: "STRING" },
-            formattingMetadata: { type: "OBJECT" }
+            formattingMetadata: {
+                type: "OBJECT",
+                properties: {
+                    style: { type: "STRING" },
+                    highlights: { type: "ARRAY", items: { type: "STRING" } }
+                }
+            }
         },
         required: ["finalReply"]
     }
