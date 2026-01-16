@@ -167,6 +167,11 @@ export const initStore = async () => {
       supabase.from('transmissions').select('*').order('timestamp', { ascending: false })
     ]);
 
+    if (uRes.error) throw uRes.error;
+    if (pRes.error) throw pRes.error;
+    if (aRes.error) throw aRes.error;
+    if (tRes.error) throw tRes.error;
+
     const users = toCamel(uRes.data || []);
     const patients = toCamel(pRes.data || []);
     const appointments = toCamel(aRes.data || []);
