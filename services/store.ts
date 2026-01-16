@@ -6,11 +6,23 @@ import { createClient } from '@supabase/supabase-js';
 const toCamel = (obj: any): any => {
   if (!obj || typeof obj !== 'object' || obj instanceof Date) return obj;
   if (Array.isArray(obj)) return obj.map(toCamel);
+
   return Object.keys(obj).reduce((acc: any, key) => {
     // Handle special case is_ald -> isALD
     let camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
     if (camelKey === 'isAld') camelKey = 'isALD';
-    acc[camelKey] = toCamel(obj[key]);
+
+    const value = toCamel(obj[key]);
+    acc[camelKey] = value;
+
+    // Polyfill for French DB columns if English prop is missing/null
+    if (key === 'nom' && !acc['lastName']) acc['lastName'] = value;
+    if (key === 'prenom' && !acc['firstName']) acc['firstName'] = value;
+    if (key === 'telephone' && !acc['phone']) acc['phone'] = value;
+    if (key === 'adresse' && !acc['address']) acc['address'] = value;
+    if (key === 'type_soin' && !acc['careType']) acc['careType'] = value;
+    if (key === 'nurse_assigned' && !acc['assignedNurseIds']) acc['assignedNurseIds'] = value ? [value] : [];
+
     return acc;
   }, {});
 };
@@ -20,19 +32,23 @@ const toSnake = (obj: any): any => {
   if (!obj || typeof obj !== 'object' || obj instanceof Date) return obj;
   if (Array.isArray(obj)) return obj.map(toSnake);
 
-  const result = Object.keys(obj).reduce((acc: any, key) => {
+  return Object.keys(obj).reduce((acc: any, key) => {
     // Handle special case isALD -> is_ald
     let snakeKey = key === 'isALD' ? 'is_ald' : key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-    acc[snakeKey] = toSnake(obj[key]);
 
-    // SPECIAL: Duplicate firstName/lastName as prenom/nom for French DB columns
-    if (key === 'firstName') acc['prenom'] = obj[key];
-    if (key === 'lastName') acc['nom'] = obj[key];
+    const value = toSnake(obj[key]);
+    acc[snakeKey] = value;
+
+    // Duplicate fields for French/English dual columns
+    if (key === 'firstName') { acc['prenom'] = value; acc['first_name'] = value; }
+    if (key === 'lastName') { acc['nom'] = value; acc['last_name'] = value; }
+    if (key === 'phone') { acc['telephone'] = value; }
+    if (key === 'address') { acc['adresse'] = value; }
+    if (key === 'careType') { acc['type_soin'] = value; }
+    if (key === 'assignedNurseIds') { acc['nurse_assigned'] = Array.isArray(value) ? value[0] : value; }
 
     return acc;
   }, {});
-
-  return result;
 };
 
 const SESSION_KEY = 'nursebot_session';
