@@ -16,9 +16,12 @@ import { masterAgent } from "./agents/masterAgent";
 
 export const processUserMessage = async (message: string, role: Role, context: any) => {
   try {
-    return await masterAgent.execute(message, context);
+    console.log("[GeminiService] Processing message:", message);
+    const result = await masterAgent.execute(message, context);
+    console.log("[GeminiService] Result:", result);
+    return result;
   } catch (error) {
-    console.error("Gemini processUserMessage error:", error);
+    console.error("[GeminiService] processUserMessage error:", error);
     return {
       reply: "L'orchestrateur BMAD rencontre une difficulté de synchronisation.",
       intent: "CHAT",

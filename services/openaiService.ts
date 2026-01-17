@@ -8,7 +8,9 @@ import OpenAI from 'openai';
 const getOpenAIClient = () => {
     const apiKey = process.env.OPENAI_API_KEY || "";
     if (!apiKey) {
-        console.error("OPENAI_API_KEY not found in environment variables");
+        console.error("[OpenAI] OPENAI_API_KEY not found in environment variables");
+    } else {
+        console.log("[OpenAI] API Key found:", apiKey.substring(0, 10) + "...");
     }
     return new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
 };
@@ -19,6 +21,7 @@ const getOpenAIClient = () => {
 export const transcribeAudio = async (audioBlob: Blob): Promise<string> => {
     const client = getOpenAIClient();
     try {
+        console.log("[OpenAI] Transcribing audio, size:", audioBlob.size, "type:", audioBlob.type);
         // Convert Blob to File (required by OpenAI SDK)
         const file = new File([audioBlob], "audio.webm", { type: audioBlob.type });
 
@@ -28,9 +31,11 @@ export const transcribeAudio = async (audioBlob: Blob): Promise<string> => {
             language: "fr", // French for better accuracy
         });
 
+        console.log("[OpenAI] Transcription success:", transcription.text);
         return transcription.text;
     } catch (error: any) {
-        console.error("OpenAI Transcription error:", error);
+        console.error("[OpenAI] Transcription error:", error);
+        console.error("[OpenAI] Error details:", error.message, error.status, error.code);
         throw new Error(`Transcription failed: ${error.message}`);
     }
 };
@@ -45,6 +50,7 @@ export const generateCompletion = async (
 ): Promise<string> => {
     const client = getOpenAIClient();
     try {
+        console.log("[OpenAI] Generating completion...");
         const completion = await client.chat.completions.create({
             model: "gpt-4o-mini", // Cost-effective model
             messages: [
@@ -55,10 +61,18 @@ export const generateCompletion = async (
             response_format: { type: "json_object" } // Force JSON output
         });
 
-        return completion.choices[0]?.message?.content || "{}";
+        const result = completion.choices[0]?.message?.content || "{}";
+        console.log("[OpenAI] Completion success:", result.substring(0, 100));
+        return result;
     } catch (error: any) {
-        console.error("OpenAI Completion error:", error);
-        throw new Error(`AI generation failed: ${error.message}`);
+        console.error("[OpenAI] Completion error:", error);
+        console.error("[OpenAI] Error details:", error.message, error.status, error.code);
+        // Return a valid JSON error instead of throwing
+        return JSON.stringify({
+            error: true,
+            message: error.message || "OpenAI API error",
+            finalReply: "Désolé, j'ai rencontré une erreur technique. Veuillez réessayer."
+        });
     }
 };
 

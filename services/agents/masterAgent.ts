@@ -23,13 +23,25 @@ export const masterAgent = {
         }`;
 
         const userPrompt = `Analyse cette demande pour NurseBot : "${userMessage}"`;
+        console.log("[MasterAgent] Starting triage...");
         const triageText = await generateCompletion(systemPrompt, userPrompt, 0.3);
 
         let triage: any = {};
         try {
             triage = JSON.parse(triageText);
+
+            // Check if OpenAI returned an error
+            if (triage.error) {
+                console.error("[MasterAgent] OpenAI error in triage:", triage.message);
+                return {
+                    reply: triage.finalReply || "Désolé, j'ai rencontré une erreur technique.",
+                    intent: "CHAT",
+                    actionRequired: false,
+                    metadata: { error: triage.message }
+                };
+            }
         } catch (e) {
-            console.error("Triage JSON parse error", e);
+            console.error("[MasterAgent] Triage JSON parse error", e, "Raw:", triageText);
             triage = { needsBusiness: false, needsMedical: false, needsAdmin: false, reasoning: "Error parsing JSON" };
         }
 
@@ -64,11 +76,24 @@ export const masterAgent = {
         const userPrompt = `Contexte: ${JSON.stringify(context)}\nMessage: ${message}`;
 
         try {
+            console.log(`[MasterAgent] Calling agent...`);
             const resultText = await generateCompletion(systemPrompt, userPrompt, 0.5);
-            return JSON.parse(resultText);
+            const result = JSON.parse(resultText);
+
+            // Check if OpenAI returned an error
+            if (result.error) {
+                console.error("[MasterAgent] OpenAI error in agent:", result.message);
+                return {
+                    finalReply: result.finalReply || "Erreur lors du traitement de votre demande.",
+                    error: true
+                };
+            }
+
+            console.log("[MasterAgent] Agent response:", result);
+            return result;
         } catch (e) {
-            console.error("Agent JSON parse error", e);
-            return {};
+            console.error("[MasterAgent] Agent JSON parse error", e);
+            return { finalReply: "Erreur de traitement.", error: true };
         }
     }
 };
