@@ -30,9 +30,17 @@ export const agentService = {
         if (!textCommand) throw new Error("Command empty or transcription failed");
 
         // 2. AI Execution (BMAD Orchestration)
+        const now = new Date();
         const context = {
             store: getStore(),
-            timestamp: new Date().toISOString()
+            timestamp: now.toISOString(),
+            currentDate: now.toLocaleDateString('fr-FR', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            }),
+            currentYear: 2026 // CRITICAL: Explicit year to prevent AI hallucination
         };
 
         const result = await masterAgent.execute(textCommand, context);

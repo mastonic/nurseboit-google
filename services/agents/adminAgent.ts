@@ -16,6 +16,8 @@ export const adminAgent = {
   - NE GÉNÈRE PAS de numéros de téléphone, adresses ou autres données fictives
   - Utilise UNIQUEMENT les informations explicitement mentionnées dans la demande
   - Si des informations critiques manquent, retourne "actionRequired: false" et demande confirmation
+  - IMPORTANT DATE : Nous sommes en 2026. Toutes les dates doivent être en 2026, PAS en 2025.
+  - Utilise le contexte "currentDate" et "currentYear" fournis pour calculer les dates correctement.
   
   RÈGLES GÉNÉRALES :
   - Priorité à l'organisation et au gain de temps pour les infirmières.
