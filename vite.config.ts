@@ -6,9 +6,9 @@ export default defineConfig(({ mode }) => {
   // Fix: Property 'cwd' does not exist on type 'Process' in some TS environments
   const env = loadEnv(mode, (process as any).cwd(), '');
   const buildDate = new Date().toLocaleString('fr-FR');
-  
+
   const n8nTarget = env.VITE_N8N_BASE_URL || env.N8N_BASE_URL || 'http://localhost:5678';
-  
+
   return {
     plugins: [react()],
     base: './',
@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       'process.env.API_KEY': JSON.stringify(env.API_KEY || ''),
+      'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY || ''),
       'process.env.VITE_N8N_BASE_URL': JSON.stringify(env.VITE_N8N_BASE_URL || ''),
       'process.env.VITE_N8N_API_KEY': JSON.stringify(env.VITE_N8N_API_KEY || env.N8N_API_KEY || ''),
       'process.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL || env.SUPABASE_URL || ''),

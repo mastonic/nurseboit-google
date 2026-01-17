@@ -29,19 +29,20 @@ export const processUserMessage = async (message: string, role: Role, context: a
 };
 
 export const transcribeVoiceNote = async (base64Audio: string, mimeType: string = "audio/webm") => {
-  const genAI = getAiClient();
   try {
-    const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash-latest",
-      contents: [{
-        role: "user",
-        parts: [
-          { inlineData: { data: base64Audio, mimeType } }, // Use dynamic mimeType
-          { text: "Transcris cette transmission. Sois précis sur les constantes médicales." }
-        ]
-      }]
-    });
-    return { transcription: response.text };
+    // Convert base64 to Blob
+    const binaryString = atob(base64Audio);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const audioBlob = new Blob([bytes], { type: mimeType });
+
+    // Use OpenAI Whisper for transcription
+    const { transcribeAudio } = await import('./openaiService');
+    const transcription = await transcribeAudio(audioBlob);
+
+    return { transcription };
   } catch (error) {
     console.error("Transcription error:", error);
     return { transcription: "[Erreur de transcription]" };
@@ -49,9 +50,10 @@ export const transcribeVoiceNote = async (base64Audio: string, mimeType: string 
 };
 
 export const analyzePrescriptionOCR = async (base64Image: string) => {
-  const genAI = getAiClient();
   try {
-    const prompt = `Extrais les données de l'ordonnance.
+    const { generateCompletion } = await import('./openaiService');
+
+    const systemPrompt = `Tu es un expert en analyse d'ordonnances médicales.
     Réponds UNIQUEMENT avec un JSON valide respectant cette structure :
     {
       "prescriber": "string",
@@ -60,19 +62,11 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
       "patientName": "string"
     }`;
 
-    const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash-latest",
-      contents: [{
-        role: "user",
-        parts: [
-          { inlineData: { data: base64Image, mimeType: 'image/png' } },
-          { text: prompt }
-        ]
-      }]
-    });
-    const text = response.text || "{}";
-    const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(jsonString);
+    const userPrompt = `Analyse cette ordonnance et extrais les informations demandées.
+    Image: data:image/png;base64,${base64Image}`;
+
+    const result = await generateCompletion(systemPrompt, userPrompt);
+    return JSON.parse(result);
   } catch (error) {
     console.error("OCR error:", error);
     return {};
@@ -107,14 +101,6 @@ export const transcribeMeeting = async (text: string) => {
 };
 
 export const checkGeminiConnection = async () => {
-  const ai = getAiClient();
-  try {
-    await ai.models.generateContent({
-      model: 'gemini-1.5-flash-latest',
-      contents: [{ role: 'user', parts: [{ text: "ping" }] }]
-    });
-    return { status: 'ok' as const, msg: 'Gemini API Connecté (Flash 1.5-001 Stable)' };
-  } catch (error: any) {
-    return { status: 'error' as const, msg: `Gemini Error: ${error.message}` };
-  }
+  const { checkOpenAIConnection } = await import('./openaiService');
+  return checkOpenAIConnection();
 };

@@ -1,14 +1,13 @@
 
-import { GoogleGenAI } from "@google/genai";
 import { businessAgent } from "./businessAgent";
 import { medicalAgent } from "./medicalAgent";
 import { adminAgent } from "./adminAgent";
 import { communicationAgent } from "./communicationAgent";
-
-const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || "", apiVersion: 'v1beta' });
+import { generateCompletion } from "../openaiService";
 
 /**
  * Master Agent Orchestrator (BMAD)
+ * Now powered by OpenAI for global availability
  */
 export const masterAgent = {
     async execute(userMessage: string, context: any) {
@@ -23,17 +22,12 @@ export const masterAgent = {
           "reasoning": "string"
         }`;
 
-        const triageResult = await genAI.models.generateContent({
-            model: "gemini-1.5-flash-latest",
-            contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nAnalyse cette demande pour NurseBot : "${userMessage}"` }] }]
-        });
+        const userPrompt = `Analyse cette demande pour NurseBot : "${userMessage}"`;
+        const triageText = await generateCompletion(systemPrompt, userPrompt, 0.3);
 
         let triage: any = {};
         try {
-            const text = triageResult.text || "{}";
-            // Clean markdown code blocks if present
-            const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            triage = JSON.parse(jsonString);
+            triage = JSON.parse(triageText);
         } catch (e) {
             console.error("Triage JSON parse error", e);
             triage = { needsBusiness: false, needsMedical: false, needsAdmin: false, reasoning: "Error parsing JSON" };
@@ -64,20 +58,14 @@ export const masterAgent = {
     },
 
     async callAgent(agent: any, message: string, context: any) {
-        // API v1 compatibility: Move system instruction and schema to prompt
         const systemPrompt = `${agent.systemInstruction}
         Réponds UNIQUEMENT avec un JSON valide.`;
 
-        const result = await genAI.models.generateContent({
-            model: "gemini-1.5-flash-latest",
-            contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nContexte: ${JSON.stringify(context)}\nMessage: ${message}` }] }]
-        });
+        const userPrompt = `Contexte: ${JSON.stringify(context)}\nMessage: ${message}`;
 
         try {
-            const text = result.text || "{}";
-            // Clean markdown code blocks if present
-            const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            return JSON.parse(jsonString);
+            const resultText = await generateCompletion(systemPrompt, userPrompt, 0.5);
+            return JSON.parse(resultText);
         } catch (e) {
             console.error("Agent JSON parse error", e);
             return {};
