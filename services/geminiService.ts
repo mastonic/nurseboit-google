@@ -51,30 +51,28 @@ export const transcribeVoiceNote = async (base64Audio: string, mimeType: string 
 export const analyzePrescriptionOCR = async (base64Image: string) => {
   const genAI = getAiClient();
   try {
+    const prompt = `Extrais les données de l'ordonnance.
+    Réponds UNIQUEMENT avec un JSON valide respectant cette structure :
+    {
+      "prescriber": "string",
+      "datePrescribed": "string",
+      "careDetails": "string",
+      "patientName": "string"
+    }`;
+
     const response = await genAI.models.generateContent({
       model: "gemini-1.5-flash",
       contents: [{
         role: "user",
         parts: [
           { inlineData: { data: base64Image, mimeType: 'image/png' } },
-          { text: "Extrais les données de l'ordonnance." }
+          { text: prompt }
         ]
-      }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            prescriber: { type: "STRING" },
-            datePrescribed: { type: "STRING" },
-            careDetails: { type: "STRING" },
-            patientName: { type: "STRING" }
-          },
-          required: ['prescriber', 'careDetails']
-        }
-      }
+      }]
     });
-    return JSON.parse(response.text || "{}");
+    const text = response.text || "{}";
+    const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(jsonString);
   } catch (error) {
     console.error("OCR error:", error);
     return {};
@@ -84,34 +82,24 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
 export const transcribeMeeting = async (text: string) => {
   const genAI = getAiClient();
   try {
+    const prompt = `Synthétise cette réunion : ${text}
+     Réponds UNIQUEMENT avec un JSON valide.
+     Structure :
+     {
+       "decisions": ["string"],
+       "tasks": [{"title": "string", "owner": "string", "deadline": "string"}]
+     }`;
+
     const response = await genAI.models.generateContent({
       model: "gemini-1.5-flash",
       contents: [{
         role: "user",
-        parts: [{ text: `Synthétise cette réunion : ${text}` }]
-      }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            decisions: { type: "ARRAY", items: { type: "STRING" } },
-            tasks: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  title: { type: "STRING" },
-                  owner: { type: "STRING" },
-                  deadline: { type: "STRING" }
-                }
-              }
-            }
-          }
-        }
-      }
+        parts: [{ text: prompt }]
+      }]
     });
-    return JSON.parse(response.text || '{"decisions":[], "tasks":[]}');
+    const resText = response.text || '{"decisions":[], "tasks":[]}';
+    const jsonString = resText.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(jsonString);
   } catch (error) {
     console.error("Meeting synthesis error:", error);
     return { decisions: [], tasks: [] };

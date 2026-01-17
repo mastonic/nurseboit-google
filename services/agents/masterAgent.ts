@@ -13,26 +13,32 @@ const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || "", apiVersion: '
 export const masterAgent = {
     async execute(userMessage: string, context: any) {
         // 1. Triage / Analysis phase
+        // API v1 compatibility: Move system instruction and schema to prompt
+        const systemPrompt = `Tu es le Master Agent Triage. Détermine quels agents spécialisés doivent être activés : BUSINESS, MEDICAL, ADMIN.
+        Réponds UNIQUEMENT avec un JSON valide respectant cette structure :
+        {
+          "needsBusiness": boolean,
+          "needsMedical": boolean,
+          "needsAdmin": boolean,
+          "reasoning": "string"
+        }`;
+
         const triageResult = await genAI.models.generateContent({
             model: "gemini-1.5-flash",
-            contents: [{ role: 'user', parts: [{ text: `Analyse cette demande pour NurseBot : "${userMessage}"` }] }],
-            config: {
-                systemInstruction: "Tu es le Master Agent Triage. Détermine quels agents spécialisés doivent être activés : BUSINESS, MEDICAL, ADMIN.",
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: "OBJECT",
-                    properties: {
-                        needsBusiness: { type: "BOOLEAN" },
-                        needsMedical: { type: "BOOLEAN" },
-                        needsAdmin: { type: "BOOLEAN" },
-                        reasoning: { type: "STRING" }
-                    },
-                    required: ["needsBusiness", "needsMedical", "needsAdmin"]
-                }
-            }
+            contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nAnalyse cette demande pour NurseBot : "${userMessage}"` }] }]
         });
 
-        const triage = JSON.parse(triageResult.text || "{}");
+        let triage: any = {};
+        try {
+            const text = triageResult.text || "{}";
+            // Clean markdown code blocks if present
+            const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            triage = JSON.parse(jsonString);
+        } catch (e) {
+            console.error("Triage JSON parse error", e);
+            triage = { needsBusiness: false, needsMedical: false, needsAdmin: false, reasoning: "Error parsing JSON" };
+        }
+
         const agentData: any = {};
 
         // 2. Specialized Execution phase (Parallel-ish simulated)
@@ -58,15 +64,23 @@ export const masterAgent = {
     },
 
     async callAgent(agent: any, message: string, context: any) {
+        // API v1 compatibility: Move system instruction and schema to prompt
+        const systemPrompt = `${agent.systemInstruction}
+        Réponds UNIQUEMENT avec un JSON valide.`;
+
         const result = await genAI.models.generateContent({
             model: "gemini-1.5-flash",
-            contents: [{ role: 'user', parts: [{ text: `Conteste: ${JSON.stringify(context)}\nMessage: ${message}` }] }],
-            config: {
-                systemInstruction: agent.systemInstruction,
-                responseMimeType: "application/json",
-                responseSchema: agent.responseSchema
-            }
+            contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nContexte: ${JSON.stringify(context)}\nMessage: ${message}` }] }]
         });
-        return JSON.parse(result.text || "{}");
+
+        try {
+            const text = result.text || "{}";
+            // Clean markdown code blocks if present
+            const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            return JSON.parse(jsonString);
+        } catch (e) {
+            console.error("Agent JSON parse error", e);
+            return {};
+        }
     }
 };
