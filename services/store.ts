@@ -204,15 +204,27 @@ export const initStore = async () => {
     const appointments = toCamel(aRes.data || []);
     const transmissions = toCamel(tRes.data || []);
 
+    // CRITICAL FIX: Merge Supabase data with local data instead of replacing
+    // This prevents losing locally-created items that haven't synced yet
+    const mergeById = (local: any[], remote: any[]) => {
+      const remoteIds = new Set(remote.map((item: any) => item.id));
+      const localOnly = local.filter((item: any) => !remoteIds.has(item.id));
+      return [...remote, ...localOnly];
+    };
+
     state = {
       ...state,
       dbStatus: 'connected',
       users: users.length ? users : state.users,
-      patients: patients.length ? patients : state.patients,
-      appointments: appointments.length ? appointments : state.appointments,
-      transmissions: transmissions.length ? transmissions : state.transmissions
+      patients: mergeById(state.patients, patients),
+      appointments: mergeById(state.appointments, appointments),
+      transmissions: mergeById(state.transmissions, transmissions)
     };
     saveOffline();
+    console.log("[Store] Supabase sync complete, merged data:", {
+      patients: state.patients.length,
+      appointments: state.appointments.length
+    });
     window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
   } catch (error: any) {
     state.dbStatus = 'error';
@@ -293,12 +305,22 @@ export const updatePatient = async (patient: Patient) => {
 };
 
 export const addPatient = async (patient: Patient) => {
+  console.log("[Store] Adding patient:", patient);
   state.patients = [...state.patients, patient];
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.from('patients').insert(toSnake(patient));
+    console.log("[Store] Syncing to Supabase...");
+    const { data, error } = await supabase.from('patients').insert(toSnake(patient));
+    if (error) {
+      console.error("[Store] Supabase insert error:", error);
+    } else {
+      console.log("[Store] Supabase insert success:", data);
+    }
+  } else {
+    console.warn("[Store] Supabase not configured, patient saved locally only");
   }
   saveOffline();
+  console.log("[Store] Patient saved to localStorage");
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
