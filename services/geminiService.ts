@@ -32,7 +32,7 @@ export const transcribeVoiceNote = async (base64Audio: string, mimeType: string 
   const genAI = getAiClient();
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-1.5-flash",
       contents: [{
         role: "user",
         parts: [
@@ -125,7 +125,7 @@ export const checkGeminiConnection = async () => {
       model: 'gemini-1.5-flash',
       contents: [{ role: 'user', parts: [{ text: "ping" }] }]
     });
-    return { status: 'ok' as const, msg: 'Gemini API Connecté (Flash 1.5)' };
+    return { status: 'ok' as const, msg: 'Gemini API Connecté (Flash 1.5 Stable)' };
   } catch (error: any) {
     return { status: 'error' as const, msg: `Gemini Error: ${error.message}` };
   }

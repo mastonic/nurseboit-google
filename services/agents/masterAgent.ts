@@ -59,7 +59,7 @@ export const masterAgent = {
 
     async callAgent(agent: any, message: string, context: any) {
         const result = await genAI.models.generateContent({
-            model: "gemini-2.0-flash-exp",
+            model: "gemini-1.5-flash",
             contents: [{ role: 'user', parts: [{ text: `Conteste: ${JSON.stringify(context)}\nMessage: ${message}` }] }],
             config: {
                 systemInstruction: agent.systemInstruction,
