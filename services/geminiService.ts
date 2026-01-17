@@ -9,7 +9,7 @@ import { getStore } from "./store";
  */
 
 const getAiClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY || "", apiVersion: 'v1' });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY || "", apiVersion: 'v1beta' });
 };
 
 import { masterAgent } from "./agents/masterAgent";
@@ -32,7 +32,7 @@ export const transcribeVoiceNote = async (base64Audio: string, mimeType: string 
   const genAI = getAiClient();
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash-001",
+      model: "gemini-1.5-flash-latest",
       contents: [{
         role: "user",
         parts: [
@@ -61,7 +61,7 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
     }`;
 
     const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash-001",
+      model: "gemini-1.5-flash-latest",
       contents: [{
         role: "user",
         parts: [
@@ -110,7 +110,7 @@ export const checkGeminiConnection = async () => {
   const ai = getAiClient();
   try {
     await ai.models.generateContent({
-      model: 'gemini-1.5-flash-001',
+      model: 'gemini-1.5-flash-latest',
       contents: [{ role: 'user', parts: [{ text: "ping" }] }]
     });
     return { status: 'ok' as const, msg: 'Gemini API Connecté (Flash 1.5-001 Stable)' };

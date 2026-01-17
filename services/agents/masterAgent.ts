@@ -5,7 +5,7 @@ import { medicalAgent } from "./medicalAgent";
 import { adminAgent } from "./adminAgent";
 import { communicationAgent } from "./communicationAgent";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || "", apiVersion: 'v1' });
+const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || "", apiVersion: 'v1beta' });
 
 /**
  * Master Agent Orchestrator (BMAD)
@@ -24,7 +24,7 @@ export const masterAgent = {
         }`;
 
         const triageResult = await genAI.models.generateContent({
-            model: "gemini-1.5-flash-001",
+            model: "gemini-1.5-flash-latest",
             contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nAnalyse cette demande pour NurseBot : "${userMessage}"` }] }]
         });
 
@@ -69,7 +69,7 @@ export const masterAgent = {
         Réponds UNIQUEMENT avec un JSON valide.`;
 
         const result = await genAI.models.generateContent({
-            model: "gemini-1.5-flash-001",
+            model: "gemini-1.5-flash-latest",
             contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nContexte: ${JSON.stringify(context)}\nMessage: ${message}` }] }]
         });
 
