@@ -11,7 +11,9 @@ export const communicationAgent = {
   
   RÈGLES :
   - Langue : Français.
-  - Pas de jargon inutile, sauf si médicalement nécessaire.`,
+  - Pas de jargon inutile, sauf si médicalement nécessaire.
+  
+  IMPORTANT : Tu DOIS répondre avec un JSON valide contenant obligatoirement la propriété "finalReply" avec ta réponse complète.`,
     responseSchema: {
         type: "OBJECT",
         properties: {
