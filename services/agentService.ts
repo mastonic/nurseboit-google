@@ -50,10 +50,17 @@ export const agentService = {
         let actionFeedback = '';
         const { intent, metadata } = result;
 
-        console.log("[AgentService] Dispatching actions:", { intent, metadata });
+        // Normalize intent to uppercase for comparison (handles createPatient, CREATE_PATIENT, etc.)
+        const normalizedIntent = intent?.toUpperCase().replace(/([A-Z])/g, '_$1').replace(/^_/, '').replace(/__/g, '_');
+
+        console.log("[AgentService] Dispatching actions:", {
+            originalIntent: intent,
+            normalizedIntent,
+            metadata
+        });
 
         try {
-            if (intent === 'CREATE_PATIENT' && metadata.admin?.patientData) {
+            if (normalizedIntent === 'CREATE_PATIENT' && metadata.admin?.patientData) {
                 console.log("[AgentService] Patient creation requested:", metadata.admin.patientData);
                 const data = metadata.admin.patientData;
 
@@ -99,7 +106,7 @@ Voulez-vous confirmer la création ? (Répondez "oui" pour confirmer)`;
                     delete (window as any).__pendingAction;
                 }
             }
-            else if (intent === 'CREATE_TRANSMISSION' && metadata.medical?.transmissionData) {
+            else if (normalizedIntent === 'CREATE_TRANSMISSION' && metadata.medical?.transmissionData) {
                 console.log("[AgentService] Creating transmission with data:", metadata.medical.transmissionData);
                 const data = metadata.medical.transmissionData;
 
@@ -126,7 +133,7 @@ Voulez-vous confirmer la création ? (Répondez "oui" pour confirmer)`;
                 await addTransmission(newTrans);
                 actionFeedback = `✅ Transmission enregistrée.`;
             }
-            else if (intent === 'CREATE_APPOINTMENT' && metadata.admin?.appointmentData) {
+            else if (normalizedIntent === 'CREATE_APPOINTMENT' && metadata.admin?.appointmentData) {
                 console.log("[AgentService] Creating appointment with data:", metadata.admin.appointmentData);
                 const data = metadata.admin.appointmentData;
                 const newApt: Appointment = {
@@ -143,7 +150,7 @@ Voulez-vous confirmer la création ? (Répondez "oui" pour confirmer)`;
                 console.log("[AgentService] Appointment created successfully:", newApt.id);
             }
             else {
-                console.log("[AgentService] No action taken. Intent:", intent, "Metadata:", metadata);
+                console.log("[AgentService] No action taken. Intent:", intent, "Normalized:", normalizedIntent, "Metadata:", metadata);
             }
         } catch (err) {
             console.error("Action Error:", err);
