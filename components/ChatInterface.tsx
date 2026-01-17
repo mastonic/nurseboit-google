@@ -142,19 +142,20 @@ const ChatInterface: React.FC = () => {
             </p>
           </div>
         )}
-        <div key={msg.id} className={`flex ${msg.direction === 'inbound' ? 'justify-start' : 'justify-end'}`}>
-          <div className="max-w-[85%] space-y-2">
-            <div className={`p-6 rounded-[2.5rem] shadow-xl relative ${msg.direction === 'inbound'
-              ? 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'
-              : 'bg-slate-900 text-white rounded-br-none'
-              }`}>
-              <p className="text-sm font-bold leading-relaxed">{msg.text}</p>
-              <p className="text-[9px] mt-4 font-black uppercase tracking-widest opacity-40 text-right">
-                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex ${msg.direction === 'inbound' ? 'justify-start' : 'justify-end'}`}>
+            <div className="max-w-[85%] space-y-2">
+              <div className={`p-6 rounded-[2.5rem] shadow-xl relative ${msg.direction === 'inbound'
+                ? 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'
+                : 'bg-slate-900 text-white rounded-br-none'
+                }`}>
+                <p className="text-sm font-bold leading-relaxed">{msg.text}</p>
+                <p className="text-[9px] mt-4 font-black uppercase tracking-widest opacity-40 text-right">
+                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
         ))}
 
         {(isTyping || isTranscribing) && (
