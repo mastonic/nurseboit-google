@@ -174,13 +174,13 @@ const ChatInterface: React.FC = () => {
         )}
       </div>
 
-      <div className="p-4 md:p-8 bg-white border-t border-slate-100">
-        <div className="flex items-center gap-3 md:gap-5 relative">
+      <div className="p-3 md:p-8 bg-white border-t border-slate-100">
+        <div className="flex items-center gap-2 md:gap-5 max-w-full">
           <button
             onClick={isRecording ? stopRecording : startRecording}
-            className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse shadow-xl' : 'bg-slate-100 text-slate-400 hover:bg-emerald-500 hover:text-slate-950 shadow-inner'}`}
+            className={`flex-shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-[1.5rem] flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse shadow-xl' : 'bg-slate-100 text-slate-400 hover:bg-emerald-500 hover:text-slate-950 shadow-inner'}`}
           >
-            <i className={`fa-solid ${isRecording ? 'fa-stop' : 'fa-microphone'} text-xl`}></i>
+            <i className={`fa-solid ${isRecording ? 'fa-stop' : 'fa-microphone'} text-lg md:text-xl`}></i>
           </button>
 
           <input
@@ -189,15 +189,15 @@ const ChatInterface: React.FC = () => {
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="Message..."
-            className="flex-1 bg-slate-50 border-none rounded-[1.5rem] py-4 px-6 md:py-5 md:px-8 text-sm font-black focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-inner"
+            className="flex-1 min-w-0 bg-slate-50 border-none rounded-[1.5rem] py-3 px-4 md:py-5 md:px-8 text-sm font-black focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-inner"
           />
 
           <button
             onClick={() => handleSendMessage()}
             disabled={!inputValue.trim()}
-            className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-xl disabled:opacity-20"
+            className="flex-shrink-0 w-12 h-12 md:w-16 md:h-16 bg-slate-900 text-white rounded-[1.5rem] hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-xl disabled:opacity-20"
           >
-            <i className="fa-solid fa-paper-plane text-xl"></i>
+            <i className="fa-solid fa-paper-plane text-lg md:text-xl"></i>
           </button>
         </div>
       </div>

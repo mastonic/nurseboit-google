@@ -42,25 +42,57 @@ export const agentService = {
         let actionFeedback = '';
         const { intent, metadata } = result;
 
+        console.log("[AgentService] Dispatching actions:", { intent, metadata });
+
         try {
             if (intent === 'CREATE_PATIENT' && metadata.admin?.patientData) {
+                console.log("[AgentService] Patient creation requested:", metadata.admin.patientData);
                 const data = metadata.admin.patientData;
-                const newPatient: Patient = {
-                    id: crypto.randomUUID(),
-                    firstName: data.firstName || 'Inconnu',
-                    lastName: data.lastName || 'Patient',
-                    phone: data.phone || '',
-                    address: data.address || '',
-                    careType: data.careType || 'Général',
-                    recurrence: 'À définir',
-                    notes: '',
-                    isALD: false,
-                    assignedNurseIds: session ? [session.userId] : []
+
+                // Build confirmation message
+                const confirmMsg = `Je vais créer un dossier patient avec ces informations :
+                
+📋 **Nom** : ${data.firstName || '?'} ${data.lastName || '?'}
+📞 **Téléphone** : ${data.phone || 'Non fourni'}
+📍 **Adresse** : ${data.address || 'Non fournie'}
+🏥 **Type de soin** : ${data.careType || 'Général'}
+
+Voulez-vous confirmer la création ? (Répondez "oui" pour confirmer)`;
+
+                // Store pending action for confirmation
+                (window as any).__pendingAction = {
+                    type: 'CREATE_PATIENT',
+                    data: {
+                        id: crypto.randomUUID(),
+                        firstName: data.firstName || '',
+                        lastName: data.lastName || '',
+                        phone: data.phone || '',
+                        address: data.address || '',
+                        careType: data.careType || 'Général',
+                        recurrence: 'À définir',
+                        notes: '',
+                        isALD: false,
+                        assignedNurseIds: session ? [session.userId] : []
+                    }
                 };
-                await addPatient(newPatient);
-                actionFeedback = `✅ Patient ${newPatient.lastName} créé.`;
+
+                actionFeedback = confirmMsg;
+                console.log("[AgentService] Waiting for user confirmation");
+            }
+            else if (textCommand.toLowerCase().includes('oui') && (window as any).__pendingAction) {
+                // Execute pending action after confirmation
+                const pending = (window as any).__pendingAction;
+                console.log("[AgentService] Executing confirmed action:", pending.type);
+
+                if (pending.type === 'CREATE_PATIENT') {
+                    await addPatient(pending.data);
+                    actionFeedback = `✅ Patient ${pending.data.firstName} ${pending.data.lastName} créé avec succès !`;
+                    console.log("[AgentService] Patient created:", pending.data.id);
+                    delete (window as any).__pendingAction;
+                }
             }
             else if (intent === 'CREATE_TRANSMISSION' && metadata.medical?.transmissionData) {
+                console.log("[AgentService] Creating transmission with data:", metadata.medical.transmissionData);
                 const data = metadata.medical.transmissionData;
 
                 // Try to find patientId if only name was provided
@@ -87,6 +119,7 @@ export const agentService = {
                 actionFeedback = `✅ Transmission enregistrée.`;
             }
             else if (intent === 'CREATE_APPOINTMENT' && metadata.admin?.appointmentData) {
+                console.log("[AgentService] Creating appointment with data:", metadata.admin.appointmentData);
                 const data = metadata.admin.appointmentData;
                 const newApt: Appointment = {
                     id: crypto.randomUUID(),
@@ -99,6 +132,10 @@ export const agentService = {
                 };
                 await updateAppointment(newApt);
                 actionFeedback = `✅ Rendez-vous planifié.`;
+                console.log("[AgentService] Appointment created successfully:", newApt.id);
+            }
+            else {
+                console.log("[AgentService] No action taken. Intent:", intent, "Metadata:", metadata);
             }
         } catch (err) {
             console.error("Action Error:", err);
