@@ -24,7 +24,7 @@ export const masterAgent = {
         }`;
 
         const triageResult = await genAI.models.generateContent({
-            model: "gemini-1.5-flash",
+            model: "gemini-1.5-flash-001",
             contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nAnalyse cette demande pour NurseBot : "${userMessage}"` }] }]
         });
 
@@ -69,7 +69,7 @@ export const masterAgent = {
         Réponds UNIQUEMENT avec un JSON valide.`;
 
         const result = await genAI.models.generateContent({
-            model: "gemini-1.5-flash",
+            model: "gemini-1.5-flash-001",
             contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nContexte: ${JSON.stringify(context)}\nMessage: ${message}` }] }]
         });
 

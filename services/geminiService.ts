@@ -32,7 +32,7 @@ export const transcribeVoiceNote = async (base64Audio: string, mimeType: string 
   const genAI = getAiClient();
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-flash-001",
       contents: [{
         role: "user",
         parts: [
@@ -61,7 +61,7 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
     }`;
 
     const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-flash-001",
       contents: [{
         role: "user",
         parts: [
@@ -91,7 +91,7 @@ export const transcribeMeeting = async (text: string) => {
      }`;
 
     const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-flash-001",
       contents: [{
         role: "user",
         parts: [{ text: prompt }]
@@ -110,10 +110,10 @@ export const checkGeminiConnection = async () => {
   const ai = getAiClient();
   try {
     await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-001',
       contents: [{ role: 'user', parts: [{ text: "ping" }] }]
     });
-    return { status: 'ok' as const, msg: 'Gemini API Connecté (Flash 1.5 Stable)' };
+    return { status: 'ok' as const, msg: 'Gemini API Connecté (Flash 1.5-001 Stable)' };
   } catch (error: any) {
     return { status: 'error' as const, msg: `Gemini Error: ${error.message}` };
   }
