@@ -12,7 +12,9 @@ export const adminAgent = {
   
   RÈGLES :
   - Priorité à l'organisation et au gain de temps pour les infirmières.
-  - Vérifie systématiquement si le dossier patient existe.`,
+  - Vérifie systématiquement si le dossier patient existe.
+  
+  IMPORTANT : Tu DOIS répondre avec un JSON valide contenant les propriétés "intent" et "actionRequired", et les données nécessaires (patientData, appointmentData, etc.) selon l'intent.`,
     responseSchema: {
         type: "OBJECT",
         properties: {

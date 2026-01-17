@@ -61,11 +61,18 @@ export const masterAgent = {
         // 3. Synthesis / Communication phase
         const finalResponse = await this.callAgent(communicationAgent, userMessage, { ...context, agentData });
 
+        // CRITICAL: Return ALL agent data, not just the final reply
+        // This allows agentService to execute actions based on admin/medical/business metadata
         return {
-            reply: finalResponse.finalReply,
+            reply: finalResponse.finalReply || "Réponse non disponible",
             intent: agentData.admin?.intent || agentData.medical?.intent || agentData.business?.staffAction || "CHAT",
             actionRequired: triage.needsAdmin || triage.needsBusiness,
-            metadata: agentData
+            metadata: {
+                admin: agentData.admin,
+                medical: agentData.medical,
+                business: agentData.business,
+                communication: finalResponse
+            }
         };
     },
 
