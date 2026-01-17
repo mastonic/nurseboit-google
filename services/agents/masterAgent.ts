@@ -14,7 +14,7 @@ export const masterAgent = {
     async execute(userMessage: string, context: any) {
         // 1. Triage / Analysis phase
         const triageResult = await genAI.models.generateContent({
-            model: "gemini-2.0-flash-exp",
+            model: "gemini-1.5-flash",
             contents: [{ role: 'user', parts: [{ text: `Analyse cette demande pour NurseBot : "${userMessage}"` }] }],
             config: {
                 systemInstruction: "Tu es le Master Agent Triage. Détermine quels agents spécialisés doivent être activés : BUSINESS, MEDICAL, ADMIN.",

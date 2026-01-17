@@ -52,7 +52,7 @@ export const analyzePrescriptionOCR = async (base64Image: string) => {
   const genAI = getAiClient();
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-1.5-flash",
       contents: [{
         role: "user",
         parts: [
@@ -85,7 +85,7 @@ export const transcribeMeeting = async (text: string) => {
   const genAI = getAiClient();
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-1.5-flash",
       contents: [{
         role: "user",
         parts: [{ text: `Synthétise cette réunion : ${text}` }]
