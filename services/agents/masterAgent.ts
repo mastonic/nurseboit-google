@@ -5,7 +5,7 @@ import { medicalAgent } from "./medicalAgent";
 import { adminAgent } from "./adminAgent";
 import { communicationAgent } from "./communicationAgent";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || "", apiVersion: 'v1' });
 
 /**
  * Master Agent Orchestrator (BMAD)

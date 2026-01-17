@@ -9,7 +9,7 @@ import { getStore } from "./store";
  */
 
 const getAiClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY || "", apiVersion: 'v1' });
 };
 
 import { masterAgent } from "./agents/masterAgent";
