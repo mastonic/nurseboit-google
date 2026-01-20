@@ -34,5 +34,13 @@ export default defineConfig(({ mode }) => {
       minify: 'terser',
       sourcemap: false
     },
+    optimizeDeps: {
+      include: ['openai'],
+      esbuildOptions: {
+        define: {
+          global: 'globalThis'
+        }
+      }
+    }
   };
 });

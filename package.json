@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "openai": "^4.77.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0"
@@ -21,7 +22,6 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.19",
-    "openai": "^4.77.3",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "terser": "^5.31.0",

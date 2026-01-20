@@ -5,11 +5,12 @@ import {
     updatePatient,
     addTransmission,
     updateAppointment,
-    addPatient, // Ensure this is imported
+    addPatient,
+    addTask,
     getCurrentSession
 } from './store';
 import { transcribeVoiceNote } from './geminiService';
-import { Patient, Transmission, Appointment } from '../types';
+import { Patient, Transmission, Appointment, Task } from '../types';
 
 export const agentService = {
     /**
@@ -29,7 +30,48 @@ export const agentService = {
 
         if (!textCommand) throw new Error("Command empty or transcription failed");
 
-        // 2. AI Execution (BMAD Orchestration)
+        // 2. Check for pending confirmation FIRST (before calling AI)
+        const session = getCurrentSession();
+        let actionFeedback = '';
+
+        // Check if user is confirming a pending action
+        const confirmationWords = ['oui', 'yes', 'ok', 'confirme', 'confirmer', 'd\'accord', 'daccord'];
+        const isConfirmation = confirmationWords.some(word => textCommand.toLowerCase().trim().includes(word));
+
+        if (isConfirmation && (window as any).__pendingAction) {
+            const pending = (window as any).__pendingAction;
+            console.log("[AgentService] User confirmed pending action:", pending.type);
+
+            try {
+                if (pending.type === 'CREATE_PATIENT') {
+                    await addPatient(pending.data);
+                    actionFeedback = `✅ Patient ${pending.data.firstName} ${pending.data.lastName} créé avec succès !`;
+                    console.log("[AgentService] Patient created successfully:", pending.data.id);
+                    delete (window as any).__pendingAction;
+
+                    // Return immediately without calling AI
+                    return {
+                        text: textCommand,
+                        reply: actionFeedback,
+                        feedback: '',
+                        raw: { intent: 'CONFIRMATION_EXECUTED', metadata: {} }
+                    };
+                }
+            } catch (err) {
+                console.error("[AgentService] Error executing confirmed action:", err);
+                actionFeedback = "❌ Erreur lors de la création du patient.";
+                delete (window as any).__pendingAction;
+
+                return {
+                    text: textCommand,
+                    reply: actionFeedback,
+                    feedback: '',
+                    raw: { intent: 'CONFIRMATION_ERROR', metadata: { error: err } }
+                };
+            }
+        }
+
+        // 3. AI Execution (BMAD Orchestration)
         const now = new Date();
         const context = {
             store: getStore(),
@@ -45,13 +87,14 @@ export const agentService = {
 
         const result = await masterAgent.execute(textCommand, context);
 
-        // 3. Dispatching Actions
-        const session = getCurrentSession();
-        let actionFeedback = '';
+        // 4. Dispatching Actions
         const { intent, metadata } = result;
 
-        // Normalize intent to uppercase for comparison (handles createPatient, CREATE_PATIENT, etc.)
-        const normalizedIntent = intent?.toUpperCase().replace(/([A-Z])/g, '_$1').replace(/^_/, '').replace(/__/g, '_');
+        // Normalize intent to uppercase for comparison (handles createPatient, CREATE_PATIENT, create_patient, etc.)
+        // CRITICAL: Check if already uppercase to avoid double-underscoring SCREAMING_SNAKE_CASE
+        const normalizedIntent = intent === intent?.toUpperCase()
+            ? intent  // Already uppercase (e.g., "CREATE_PATIENT"), use as-is
+            : intent?.replace(/([A-Z])/g, '_$1').replace(/^_/, '').toUpperCase(); // camelCase, convert to SCREAMING_SNAKE_CASE
 
         console.log("[AgentService] Dispatching actions:", {
             originalIntent: intent,
@@ -93,18 +136,6 @@ Voulez-vous confirmer la création ? (Répondez "oui" pour confirmer)`;
 
                 actionFeedback = confirmMsg;
                 console.log("[AgentService] Waiting for user confirmation");
-            }
-            else if (textCommand.toLowerCase().includes('oui') && (window as any).__pendingAction) {
-                // Execute pending action after confirmation
-                const pending = (window as any).__pendingAction;
-                console.log("[AgentService] Executing confirmed action:", pending.type);
-
-                if (pending.type === 'CREATE_PATIENT') {
-                    await addPatient(pending.data);
-                    actionFeedback = `✅ Patient ${pending.data.firstName} ${pending.data.lastName} créé avec succès !`;
-                    console.log("[AgentService] Patient created:", pending.data.id);
-                    delete (window as any).__pendingAction;
-                }
             }
             else if (normalizedIntent === 'CREATE_TRANSMISSION' && metadata.medical?.transmissionData) {
                 console.log("[AgentService] Creating transmission with data:", metadata.medical.transmissionData);
@@ -149,6 +180,24 @@ Voulez-vous confirmer la création ? (Répondez "oui" pour confirmer)`;
                 actionFeedback = `✅ Rendez-vous planifié.`;
                 console.log("[AgentService] Appointment created successfully:", newApt.id);
             }
+            else if (normalizedIntent === 'CREATE_TASK' && metadata.admin?.taskData) {
+                console.log("[AgentService] Creating task with data:", metadata.admin.taskData);
+                const data = metadata.admin.taskData;
+
+                const newTask: Task = {
+                    id: crypto.randomUUID(),
+                    title: data.title || data.description || 'Nouvelle tâche',
+                    priority: (data.priority as any) || 'medium',
+                    deadline: data.deadline || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                    ownerId: session?.userId || 'system',
+                    patientId: data.patientId,
+                    status: 'todo'
+                };
+
+                await addTask(newTask);
+                actionFeedback = `✅ Tâche créée : ${newTask.title}`;
+                console.log("[AgentService] Task created successfully:", newTask.id);
+            }
             else {
                 console.log("[AgentService] No action taken. Intent:", intent, "Normalized:", normalizedIntent, "Metadata:", metadata);
             }
@@ -159,8 +208,8 @@ Voulez-vous confirmer la création ? (Répondez "oui" pour confirmer)`;
 
         return {
             text: textCommand,
-            reply: result.reply,
-            feedback: actionFeedback,
+            reply: actionFeedback || result.reply,
+            feedback: actionFeedback ? '' : '',
             raw: result
         };
     },

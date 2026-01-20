@@ -3,7 +3,6 @@ import { businessAgent } from "./businessAgent";
 import { medicalAgent } from "./medicalAgent";
 import { adminAgent } from "./adminAgent";
 import { communicationAgent } from "./communicationAgent";
-import { generateCompletion } from "../openaiService";
 
 /**
  * Master Agent Orchestrator (BMAD)
@@ -11,6 +10,9 @@ import { generateCompletion } from "../openaiService";
  */
 export const masterAgent = {
     async execute(userMessage: string, context: any) {
+        // Dynamic import to prevent Vite from bundling server-only openai package
+        const { generateCompletion } = await import("../openaiService");
+
         // 1. Triage / Analysis phase
         // API v1 compatibility: Move system instruction and schema to prompt
         const systemPrompt = `Tu es le Master Agent Triage. Détermine quels agents spécialisés doivent être activés : BUSINESS, MEDICAL, ADMIN.
@@ -63,9 +65,17 @@ export const masterAgent = {
 
         // CRITICAL: Return ALL agent data, not just the final reply
         // This allows agentService to execute actions based on admin/medical/business metadata
+        // Filter out "NONE" intents to allow other agents' intents to be used
+        const getIntent = () => {
+            if (agentData.admin?.intent && agentData.admin.intent !== 'NONE') return agentData.admin.intent;
+            if (agentData.medical?.intent && agentData.medical.intent !== 'NONE') return agentData.medical.intent;
+            if (agentData.business?.staffAction) return agentData.business.staffAction;
+            return "CHAT";
+        };
+
         return {
             reply: finalResponse.finalReply || "Réponse non disponible",
-            intent: agentData.admin?.intent || agentData.medical?.intent || agentData.business?.staffAction || "CHAT",
+            intent: getIntent(),
             actionRequired: triage.needsAdmin || triage.needsBusiness,
             metadata: {
                 admin: agentData.admin,
@@ -77,6 +87,9 @@ export const masterAgent = {
     },
 
     async callAgent(agent: any, message: string, context: any) {
+        // Dynamic import to prevent Vite from bundling server-only openai package
+        const { generateCompletion } = await import("../openaiService");
+
         const systemPrompt = `${agent.systemInstruction}
         Réponds UNIQUEMENT avec un JSON valide.`;
 
