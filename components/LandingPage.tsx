@@ -44,7 +44,7 @@ const LandingPage: React.FC = () => {
                             onClick={() => navigate('/login')}
                             className="px-10 py-5 bg-emerald-500 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl shadow-emerald-200 hover:scale-105 transition-all text-sm w-full sm:w-auto"
                         >
-                            Démarrer gratuitement
+                            Ouvrir l'accès au cabinet
                         </button>
                     </div>
                 </div>
