@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 // Fix: added markTransmissionReceived to imports
-import { getStore, subscribeToStore, addTransmission, getCurrentSession, addLog, updatePatient, saveStore, updateAppointment, markTransmissionReceived } from '../services/store';
+import { getStore, subscribeToStore, addTransmission, getCurrentSession, addLog, updatePatient, saveStore, updateAppointment, markTransmissionReceived, generateUUID } from '../services/store';
 import { transcribeVoiceNote } from '../services/geminiService';
 import { callNurseBotAgent } from '../services/n8nService';
 import { Patient, Transmission, Appointment, User } from '../types';
@@ -90,7 +90,7 @@ const PatientDossier: React.FC = () => {
     const targetNurse = store.users.find(u => u.id === targetNurseId);
     const fullText = `OBSERVATIONS: ${obs}\nVIGILANCE: ${alertText || 'RAS'}\nACTION À FAIRE: ${action || 'Continuer protocole'}`;
     const newTrans: Transmission = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       patientId: patient.id,
       fromId: session.userId,
       fromName: session.name,
@@ -148,7 +148,7 @@ const PatientDossier: React.FC = () => {
 
     if (showAptModal === 'add') {
       const newApt: Appointment = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         patientId: patient.id,
         nurseId: formData.get('nurseId') as string,
         dateTime: `${date}T${time}:00`,

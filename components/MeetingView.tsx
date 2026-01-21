@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { transcribeMeeting } from '../services/geminiService';
-import { getStore, addLog, subscribeToStore, upsertUser, deleteUser, getCurrentSession } from '../services/store';
+import { getStore, addLog, subscribeToStore, upsertUser, deleteUser, getCurrentSession, generateUUID } from '../services/store';
 import { User, Role } from '../types';
 
 const MeetingView: React.FC = () => {
@@ -25,7 +25,7 @@ const MeetingView: React.FC = () => {
     } catch (e) { console.error(e); } finally { setIsProcessing(false); }
   };
 
-  const handleSaveUser = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const firstName = formData.get('firstName') as string;
@@ -36,7 +36,7 @@ const MeetingView: React.FC = () => {
     const calendarId = formData.get('calendarId') as string;
 
     const userData: User = {
-      id: typeof showUserModal === 'object' && showUserModal ? showUserModal.id : `u-${Date.now()}`,
+      id: typeof showUserModal === 'object' && showUserModal ? showUserModal.id : generateUUID(),
       firstName,
       lastName,
       role,
@@ -45,7 +45,7 @@ const MeetingView: React.FC = () => {
       active: true,
       calendarId: calendarId || undefined
     };
-    upsertUser(userData);
+    await upsertUser(userData);
     setShowUserModal(null);
   };
 

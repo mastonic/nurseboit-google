@@ -215,7 +215,7 @@ export const initStore = async () => {
     state = {
       ...state,
       dbStatus: 'connected',
-      users: users.length ? users : state.users,
+      users: mergeById(state.users, users),
       patients: mergeById(state.patients, patients),
       appointments: mergeById(state.appointments, appointments),
       transmissions: mergeById(state.transmissions, transmissions)
@@ -377,6 +377,17 @@ export const addInternalMessage = (msg: any) => {
   state.internalMessages = [...(state.internalMessages || []), msg];
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 };
 
 export const deleteUser = async (userId: string) => {

@@ -60,7 +60,7 @@ const PrescriptionView: React.FC = () => {
     if (!scannedData) return;
     const patientId = store.patients[0]?.id; // Default or mapping logic
     const newPresc: Prescription = {
-      id: `pr-${Date.now()}`,
+      id: crypto.randomUUID(),
       patientId: patientId,
       prescriberName: scannedData.prescriber || 'Inconnu',
       prescriberRpps: scannedData.rpps || '',

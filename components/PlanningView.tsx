@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { getStore, saveStore, addLog, subscribeToStore, updateAppointment, getCurrentSession, setExternalEvents } from '../services/store';
+import { getStore, saveStore, addLog, subscribeToStore, updateAppointment, getCurrentSession, setExternalEvents, generateUUID } from '../services/store';
 import { callNurseBotAgent } from '../services/n8nService';
 import { Appointment, Patient, User } from '../types';
 
@@ -118,7 +118,7 @@ const PlanningView: React.FC = () => {
 
     if (modalState.mode === 'add') {
       finalApt = {
-        id: Date.now().toString(),
+        id: generateUUID(),
         patientId,
         nurseId: targetNurseId,
         dateTime,
@@ -174,8 +174,8 @@ const PlanningView: React.FC = () => {
             onClick={handleGoogleSync}
             disabled={isSyncing}
             className={`px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-3 shadow-sm border ${isSyncing
-                ? 'bg-indigo-50 border-indigo-100 text-indigo-400 cursor-wait'
-                : 'bg-white border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 active:scale-95'
+              ? 'bg-indigo-50 border-indigo-100 text-indigo-400 cursor-wait'
+              : 'bg-white border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 active:scale-95'
               }`}
           >
             <i className={`fa-solid ${isSyncing ? 'fa-sync fa-spin' : 'fa-google'}`}></i>
@@ -232,8 +232,8 @@ const PlanningView: React.FC = () => {
                         key={apt.id}
                         onClick={() => !isExternal && setModalState({ mode: 'view', data: apt })}
                         className={`p-4 rounded-2xl shadow-sm transition-all min-w-[220px] max-w-[300px] border-l-4 ${isExternal
-                            ? 'bg-indigo-50 border-indigo-500'
-                            : 'bg-emerald-50 border-emerald-500 cursor-pointer hover:scale-[1.02]'
+                          ? 'bg-indigo-50 border-indigo-500'
+                          : 'bg-emerald-50 border-emerald-500 cursor-pointer hover:scale-[1.02]'
                           }`}
                       >
                         <div className="flex justify-between items-start mb-2">
