@@ -70,12 +70,9 @@ const PatientsView: React.FC = () => {
             createdBy: session.userId,
          };
          addPatient(newPatient);
-         // saveStore({ patients: [...store.patients, newPatient] }); // Remplace par addPatient
-         addLog(`Nouveau patient créé: ${newPatient.lastName}`, session.userId);
       } else if (modalMode === 'edit' && selectedPatient) {
          const updated = { ...selectedPatient, ...patientData };
          updatePatient(updated as Patient);
-         addLog(`Patient mis à jour: ${updated.lastName}`, session.userId);
       }
       setModalMode(null);
    };
@@ -83,7 +80,6 @@ const PatientsView: React.FC = () => {
    const handleDelete = () => {
       if (selectedPatient && window.confirm('Êtes-vous sûr de vouloir supprimer définitivement ce dossier patient ?')) {
          deletePatient(selectedPatient.id);
-         addLog(`Patient supprimé: ${selectedPatient.lastName}`, session?.userId || 'system');
          setModalMode(null);
       }
    };

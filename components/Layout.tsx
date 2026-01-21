@@ -1,13 +1,22 @@
 
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { getStore, getCurrentSession, logout } from '../services/store';
+import { getStore, getCurrentSession, logout, trackActivity } from '../services/store';
+import { useEffect } from 'react';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const session = getCurrentSession();
   const { alerts, messages, transmissions, settings, dbStatus, dbError } = getStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (session) {
+      trackActivity();
+      const interval = setInterval(trackActivity, 5 * 60 * 1000); // Every 5 minutes
+      return () => clearInterval(interval);
+    }
+  }, [session]);
 
   const unreadAlerts = alerts.filter(a => !a.isRead && (!a.userId || a.userId === session?.userId)).length;
   const unreadMessages = messages.filter(m => m.direction === 'inbound' && m.status !== 'read').length;

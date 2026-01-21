@@ -155,7 +155,7 @@ const PlanningView: React.FC = () => {
       }).catch(err => console.error("Sync to Google failed", err.message));
     }
 
-    addLog(`Rendez-vous planifié et synchronisé Google`, session.userId);
+    addLog(`Rendez-vous planifié`);
     setModalState(null);
   };
 

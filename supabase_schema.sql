@@ -15,7 +15,17 @@ CREATE TABLE IF NOT EXISTS public.users (
     avatar TEXT,
     active BOOLEAN DEFAULT true,
     calendar_id TEXT,
+    last_active_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Table: logs
+CREATE TABLE IF NOT EXISTS public.logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    action TEXT NOT NULL,
+    user_name TEXT,
+    user_id UUID REFERENCES public.users(id),
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- Table: patients
@@ -133,6 +143,7 @@ ALTER TABLE public.transmissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.prescriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pre_invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.logs ENABLE ROW LEVEL SECURITY;
 
 -- Policies (Allow all for rapid prototyping/testing)
 CREATE POLICY "Enable all for authenticated users" ON public.users FOR ALL TO authenticated USING (true);
@@ -142,3 +153,4 @@ CREATE POLICY "Enable all for authenticated users" ON public.transmissions FOR A
 CREATE POLICY "Enable all for authenticated users" ON public.prescriptions FOR ALL TO authenticated USING (true);
 CREATE POLICY "Enable all for authenticated users" ON public.pre_invoices FOR ALL TO authenticated USING (true);
 CREATE POLICY "Enable all for authenticated users" ON public.tasks FOR ALL TO authenticated USING (true);
+CREATE POLICY "Enable all for authenticated users" ON public.logs FOR ALL TO authenticated USING (true);

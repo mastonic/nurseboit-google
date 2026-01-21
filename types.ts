@@ -12,6 +12,15 @@ export interface User {
   pin: string;
   active: boolean;
   calendarId?: string;
+  lastActiveAt?: string;
+}
+
+export interface Log {
+  id: string;
+  action: string;
+  userName: string;
+  userId?: string;
+  timestamp: string;
 }
 
 export interface UserSession {

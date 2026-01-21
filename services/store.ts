@@ -23,6 +23,9 @@ const toCamel = (obj: any): any => {
     if (key === 'created_by') camelKey = 'createdBy';
     if (key === 'assigned_nurse_ids') camelKey = 'assignedNurseIds';
     if (key === 'is_demo') camelKey = 'isDemo';
+    if (key === 'last_active_at') camelKey = 'lastActiveAt';
+    if (key === 'user_name') camelKey = 'userName';
+    if (key === 'user_id') camelKey = 'userId';
 
     acc[camelKey] = toCamel(obj[key]);
     return acc;
@@ -48,6 +51,9 @@ const toSnake = (obj: any): any => {
     if (key === 'createdBy') snakeKey = 'created_by';
     if (key === 'assignedNurseIds') snakeKey = 'assigned_nurse_ids';
     if (key === 'isDemo') snakeKey = 'is_demo';
+    if (key === 'lastActiveAt') snakeKey = 'last_active_at';
+    if (key === 'userName') snakeKey = 'user_name';
+    if (key === 'userId') snakeKey = 'user_id';
 
     acc[snakeKey] = toSnake(obj[key]);
     return acc;
@@ -203,6 +209,8 @@ export const initStore = async () => {
     const patients = toCamel(pRes.data || []);
     const appointments = toCamel(aRes.data || []);
     const transmissions = toCamel(tRes.data || []);
+    const lRes = await supabase.from('logs').select('*').order('timestamp', { ascending: false }).limit(100);
+    const logs = toCamel(lRes.data || []);
 
     // CRITICAL FIX: Merge Supabase data with local data instead of replacing
     // This prevents losing locally-created items that haven't synced yet
@@ -218,7 +226,8 @@ export const initStore = async () => {
       users: mergeById(state.users, users),
       patients: mergeById(state.patients, patients),
       appointments: mergeById(state.appointments, appointments),
-      transmissions: mergeById(state.transmissions, transmissions)
+      transmissions: mergeById(state.transmissions, transmissions),
+      logs: logs.length ? logs : state.logs
     };
     saveOffline();
     console.log("[Store] Supabase sync complete, merged data:", {
@@ -279,6 +288,7 @@ export const login = (userId: string, pin: string): boolean => {
       expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    addLog(`Connexion réussie : ${session.name}`);
     window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
     return true;
   }
@@ -287,11 +297,36 @@ export const login = (userId: string, pin: string): boolean => {
 
 export const logout = () => { localStorage.removeItem(SESSION_KEY); window.dispatchEvent(new CustomEvent(UPDATE_EVENT)); };
 
-export const addLog = (action: string, userId: string = 'system') => {
-  const user = getCurrentSession();
-  state.logs = [{ id: Date.now().toString(), action, user: user?.name || 'Système', timestamp: new Date().toISOString() }, ...state.logs.slice(0, 49)];
+export const addLog = async (action: string) => {
+  const session = getCurrentSession();
+  const log = {
+    id: generateUUID(),
+    action,
+    userName: session?.name || 'Système',
+    userId: session?.userId,
+    timestamp: new Date().toISOString()
+  };
+  state.logs = [log, ...state.logs.slice(0, 99)];
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('logs').insert(toSnake(log));
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
+export const trackActivity = async () => {
+  const session = getCurrentSession();
+  if (!session) return;
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('users').update({ last_active_at: new Date().toISOString() }).eq('id', session.userId);
+  }
+};
+
+export const getActiveUserCount = () => {
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  return state.users.filter((u: User) => u.lastActiveAt && u.lastActiveAt > tenMinutesAgo).length;
 };
 
 export const updatePatient = async (patient: Patient) => {
@@ -301,6 +336,7 @@ export const updatePatient = async (patient: Patient) => {
     await supabase.from('patients').upsert(toSnake(patient));
   }
   saveOffline();
+  addLog(`Mise à jour du dossier patient : ${patient.firstName} ${patient.lastName}`);
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
@@ -320,6 +356,7 @@ export const addPatient = async (patient: Patient) => {
     console.warn("[Store] Supabase not configured, patient saved locally only");
   }
   saveOffline();
+  addLog(`Création d'un nouveau patient : ${patient.firstName} ${patient.lastName}`);
   console.log("[Store] Patient saved to localStorage");
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
@@ -331,6 +368,7 @@ export const deletePatient = async (patientId: string) => {
     await supabase.from('patients').delete().eq('id', patientId);
   }
   saveOffline();
+  addLog(`Suppression d'un dossier patient`);
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
@@ -341,6 +379,7 @@ export const addTransmission = async (trans: Transmission) => {
     await supabase.from('transmissions').insert(toSnake(trans));
   }
   saveOffline();
+  addLog(`Nouvelle transmission transmise`);
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
@@ -357,6 +396,7 @@ export const updateAppointment = async (apt: Appointment) => {
     await supabase.from('appointments').upsert(toSnake(apt));
   }
   saveOffline();
+  addLog(`Mise à jour d'un rendez-vous`);
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
@@ -397,6 +437,7 @@ export const deleteUser = async (userId: string) => {
     await supabase.from('users').delete().eq('id', userId);
   }
   saveOffline();
+  addLog(`Suppression d'un membre du staff (ID: ${userId})`);
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
@@ -408,6 +449,7 @@ export const upsertUser = async (user: User) => {
     await supabase.from('users').upsert(toSnake(user));
   }
   saveOffline();
+  addLog(`${exists ? 'Modification' : 'Création'} du profil staff : ${user.firstName} ${user.lastName}`);
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
@@ -426,6 +468,7 @@ export const addPrescription = async (presc: Prescription) => {
     await supabase.from('prescriptions').insert(toSnake(presc));
   }
   saveOffline();
+  addLog(`Nouvelle ordonnance ajoutée`);
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
@@ -436,6 +479,7 @@ export const addTask = async (task: Task) => {
     await supabase.from('tasks').insert(toSnake(task));
   }
   saveOffline();
+  addLog(`Nouvelle tâche créée`);
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
@@ -446,6 +490,7 @@ export const updateTask = async (task: Task) => {
     await supabase.from('tasks').upsert(toSnake(task));
   }
   saveOffline();
+  addLog(`Mise à jour d'une tâche`);
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 

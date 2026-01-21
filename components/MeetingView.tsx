@@ -53,7 +53,6 @@ const MeetingView: React.FC = () => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer ce membre ? Cette action est irréversible.")) {
       deleteUser(userId);
       setShowUserModal(null);
-      addLog(`Suppression du membre du staff (ID: ${userId})`);
     }
   };
 
@@ -156,6 +155,54 @@ const MeetingView: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* SECTION LOGS - Admin Only */}
+      {canManageStaff && (
+        <section className="space-y-6 pt-12 border-t border-slate-100">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-4">
+              <i className="fa-solid fa-list-ul text-slate-400"></i>
+              Journal d'audit
+            </h2>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{store.logs.length} entrées</span>
+          </div>
+          <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Date & Heure</th>
+                  <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Utilisateur</th>
+                  <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {store.logs.slice(0, 50).map((log: any) => (
+                  <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-6">
+                      <p className="text-xs font-black text-slate-900">{new Date(log.timestamp).toLocaleDateString()}</p>
+                      <p className="text-[10px] text-slate-400 font-bold">{new Date(log.timestamp).toLocaleTimeString()}</p>
+                    </td>
+                    <td className="p-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] font-black text-slate-400">{log.userName?.[0] || 'S'}</div>
+                        <span className="text-xs font-bold text-slate-700">{log.userName}</span>
+                      </div>
+                    </td>
+                    <td className="p-6">
+                      <span className="text-[11px] font-medium text-slate-600 italic">"{log.action}"</span>
+                    </td>
+                  </tr>
+                ))}
+                {store.logs.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="p-20 text-center text-slate-300 italic text-sm">Aucun log enregistré.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* USER MODAL */}
       {showUserModal && (

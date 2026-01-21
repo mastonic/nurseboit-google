@@ -104,7 +104,6 @@ const PatientDossier: React.FC = () => {
     };
     addTransmission(newTrans);
     setObs(''); setAlertText(''); setAction(''); setTargetNurseId(''); setStep(1);
-    addLog(`Nouvelle transmission pour ${patient.lastName}`, session.userId);
   };
 
   const handleSaveEdit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -137,7 +136,6 @@ const PatientDossier: React.FC = () => {
 
     updatePatient(updatedPatient);
     setIsEditing(false);
-    addLog(`Patient mis à jour via dossier: ${updatedPatient.lastName}`, session.userId);
   };
 
   const handleAptAction = (e: React.FormEvent<HTMLFormElement>) => {
@@ -330,7 +328,6 @@ const PatientDossier: React.FC = () => {
                         <button
                           onClick={() => {
                             markTransmissionReceived(t.id, session?.userId || '');
-                            addLog(`Accusé réception transmission de ${t.fromName}`);
                           }}
                           className="px-4 py-2 bg-emerald-100 text-emerald-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-all"
                         >
