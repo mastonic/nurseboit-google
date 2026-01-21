@@ -379,6 +379,16 @@ export const addInternalMessage = (msg: any) => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
+export const deleteUser = async (userId: string) => {
+  state.users = state.users.filter((u: User) => u.id !== userId);
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('users').delete().eq('id', userId);
+  }
+  saveOffline();
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+};
+
 export const upsertUser = async (user: User) => {
   const exists = state.users.some((u: User) => u.id === user.id);
   state.users = exists ? state.users.map((u: User) => u.id === user.id ? user : u) : [...state.users, user];
