@@ -320,7 +320,18 @@ export const trackActivity = async () => {
   if (!session) return;
   const supabase = getSupabaseClient();
   if (supabase) {
+    // Update self
     await supabase.from('users').update({ last_active_at: new Date().toISOString() }).eq('id', session.userId);
+    // Fetch others
+    const { data } = await supabase.from('users').select('id, last_active_at');
+    if (data) {
+      const activityMap = new Map(data.map((u: any) => [u.id, u.last_active_at]));
+      state.users = state.users.map((u: User) => ({
+        ...u,
+        lastActiveAt: activityMap.get(u.id) || u.lastActiveAt
+      }));
+      window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+    }
   }
 };
 

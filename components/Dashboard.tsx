@@ -1,12 +1,18 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStore, getCurrentSession, getActiveUserCount } from '../services/store';
+import { getStore, getCurrentSession, getActiveUserCount, subscribeToStore } from '../services/store';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const session = getCurrentSession();
-  const { appointments, alerts, messages, transmissions, invoices, patients, prescriptions, settings } = getStore();
+  const [store, setStore] = React.useState(getStore());
+
+  React.useEffect(() => {
+    return subscribeToStore(() => setStore(getStore()));
+  }, []);
+
+  const { appointments, alerts, messages, transmissions, invoices, patients, prescriptions, settings } = store;
 
   if (!session) return null;
 
@@ -42,7 +48,7 @@ const Dashboard: React.FC = () => {
           { label: 'Transmissions', value: transmissions.length, icon: 'fa-clipboard-list', color: 'bg-amber-500', path: '/transmissions' },
           { label: 'Messages non lus', value: unreadMessages, icon: 'fa-whatsapp', color: 'bg-emerald-500', path: '/messages' },
           { label: 'Ordonnances', value: expiringPresc, icon: 'fa-file-medical', color: 'bg-rose-500', path: '/prescriptions', alert: expiringPresc > 0 },
-          ...(isAdmin ? [{ label: 'Staff Connecté', value: activeUsers, icon: 'fa-user-clock', color: 'bg-indigo-500', path: '/meetings' }] : []),
+          { label: 'Staff Connecté', value: activeUsers, icon: 'fa-user-clock', color: 'bg-indigo-500', path: '/meetings' },
         ].map((kpi, i) => (
           <div
             key={i}

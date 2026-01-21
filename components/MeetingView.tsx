@@ -80,7 +80,14 @@ const MeetingView: React.FC = () => {
                 {u.firstName[0]}
               </div>
               <h3 className="font-black text-slate-900 leading-tight uppercase text-sm truncate">{u.firstName} {u.lastName}</h3>
-              <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">{u.role}</p>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">{u.role}</p>
+                {u.lastActiveAt && (new Date(u.lastActiveAt) > new Date(Date.now() - 10 * 60 * 1000)) && (
+                  <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter animate-pulse">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> En ligne
+                  </span>
+                )}
+              </div>
 
               {u.calendarId && (
                 <div className="absolute top-4 right-4 text-emerald-500" title="Calendar Sync Enabled">

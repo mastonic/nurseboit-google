@@ -13,7 +13,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useEffect(() => {
     if (session) {
       trackActivity();
-      const interval = setInterval(trackActivity, 5 * 60 * 1000); // Every 5 minutes
+      const interval = setInterval(trackActivity, 30 * 1000); // Every 30 seconds
       return () => clearInterval(interval);
     }
   }, [session]);
