@@ -95,8 +95,8 @@ CREATE TABLE IF NOT EXISTS public.transmissions (
     is_demo BOOLEAN DEFAULT false
 );
 
--- Table: prescriptions
-CREATE TABLE IF NOT EXISTS public.prescriptions (
+-- Table: ordonnances (Prescriptions)
+CREATE TABLE IF NOT EXISTS public.ordonnances (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
     prescriber_name TEXT NOT NULL,
@@ -140,7 +140,7 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transmissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.prescriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ordonnances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pre_invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.logs ENABLE ROW LEVEL SECURITY;
@@ -150,7 +150,7 @@ CREATE POLICY "Enable all for authenticated users" ON public.users FOR ALL TO au
 CREATE POLICY "Enable all for authenticated users" ON public.patients FOR ALL TO authenticated USING (true);
 CREATE POLICY "Enable all for authenticated users" ON public.appointments FOR ALL TO authenticated USING (true);
 CREATE POLICY "Enable all for authenticated users" ON public.transmissions FOR ALL TO authenticated USING (true);
-CREATE POLICY "Enable all for authenticated users" ON public.prescriptions FOR ALL TO authenticated USING (true);
+CREATE POLICY "Enable all for authenticated users" ON public.ordonnances FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Enable all for authenticated users" ON public.pre_invoices FOR ALL TO authenticated USING (true);
 CREATE POLICY "Enable all for authenticated users" ON public.tasks FOR ALL TO authenticated USING (true);
 CREATE POLICY "Enable all for authenticated users" ON public.logs FOR ALL TO authenticated USING (true);

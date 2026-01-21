@@ -193,22 +193,25 @@ export const initStore = async () => {
   }
   try {
     state.dbStatus = 'loading';
-    const [uRes, pRes, aRes, tRes] = await Promise.all([
+    const [uRes, pRes, aRes, tRes, oRes] = await Promise.all([
       supabase.from('users').select('*'),
       supabase.from('patients').select('*'),
       supabase.from('appointments').select('*'),
-      supabase.from('transmissions').select('*').order('timestamp', { ascending: false })
+      supabase.from('transmissions').select('*').order('timestamp', { ascending: false }),
+      supabase.from('ordonnances').select('*')
     ]);
 
     if (uRes.error) throw uRes.error;
     if (pRes.error) throw pRes.error;
     if (aRes.error) throw aRes.error;
     if (tRes.error) throw tRes.error;
+    if (oRes.error) throw oRes.error;
 
     const users = toCamel(uRes.data || []);
     const patients = toCamel(pRes.data || []);
     const appointments = toCamel(aRes.data || []);
     const transmissions = toCamel(tRes.data || []);
+    const ordonnances = toCamel(oRes.data || []);
     const lRes = await supabase.from('logs').select('*').order('timestamp', { ascending: false }).limit(100);
     const logs = toCamel(lRes.data || []);
 
@@ -227,6 +230,7 @@ export const initStore = async () => {
       patients: mergeById(state.patients, patients),
       appointments: mergeById(state.appointments, appointments),
       transmissions: mergeById(state.transmissions, transmissions),
+      prescriptions: mergeById(state.prescriptions, ordonnances),
       logs: logs.length ? logs : state.logs
     };
     saveOffline();
@@ -476,7 +480,7 @@ export const addPrescription = async (presc: Prescription) => {
   state.prescriptions = [presc, ...state.prescriptions];
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.from('prescriptions').insert(toSnake(presc));
+    await supabase.from('ordonnances').insert(toSnake(presc));
   }
   saveOffline();
   addLog(`Nouvelle ordonnance ajoutée`);

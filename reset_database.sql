@@ -3,7 +3,7 @@
 -- 1. DROP EXISTING TABLES (CASCADE)
 DROP TABLE IF EXISTS public.transmissions CASCADE;
 DROP TABLE IF EXISTS public.appointments CASCADE;
-DROP TABLE IF EXISTS public.prescriptions CASCADE;
+DROP TABLE IF EXISTS public.ordonnances CASCADE;
 DROP TABLE IF EXISTS public.pre_invoices CASCADE;
 DROP TABLE IF EXISTS public.tasks CASCADE;
 DROP TABLE IF EXISTS public.messages CASCADE;
@@ -94,8 +94,8 @@ CREATE TABLE public.transmissions (
     is_demo BOOLEAN DEFAULT false
 );
 
--- 6. CREATE TABLE PRESCRIPTIONS
-CREATE TABLE public.prescriptions (
+-- 6. CREATE TABLE ORDONNANCES
+CREATE TABLE public.ordonnances (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
     prescriber_name TEXT,
@@ -150,20 +150,20 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transmissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.prescriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ordonnances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pre_invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
--- Allow anonymous access (Public Read/Write)
-CREATE POLICY "Public Access Users" ON public.users FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access Patients" ON public.patients FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access Appointments" ON public.appointments FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access Transmissions" ON public.transmissions FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access Prescriptions" ON public.prescriptions FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access Tasks" ON public.tasks FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access PreInvoices" ON public.pre_invoices FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access Messages" ON public.messages FOR ALL USING (true) WITH CHECK (true);
+-- Allow authenticated access
+CREATE POLICY "Auth Access Users" ON public.users FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Access Patients" ON public.patients FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Access Appointments" ON public.appointments FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Access Transmissions" ON public.transmissions FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Access Ordonnances" ON public.ordonnances FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Access Tasks" ON public.tasks FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Access PreInvoices" ON public.pre_invoices FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Access Messages" ON public.messages FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- 11. INSERT DEFAULT USERS
 INSERT INTO public.users (id, first_name, last_name, role, pin, active, phone)
