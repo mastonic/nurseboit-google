@@ -8,10 +8,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const session = getCurrentSession();
   const { alerts, messages, transmissions, settings, dbStatus, dbError } = getStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
+
   const unreadAlerts = alerts.filter(a => !a.isRead && (!a.userId || a.userId === session?.userId)).length;
   const unreadMessages = messages.filter(m => m.direction === 'inbound' && m.status !== 'read').length;
-  const unreadTrans = transmissions.filter((t:any) => t.status === 'sent' && t.fromId !== session?.userId).length;
+  const unreadTrans = transmissions.filter((t: any) => t.status === 'sent' && t.fromId !== session?.userId).length;
 
   const handleLogout = () => {
     logout();
@@ -21,7 +21,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (!session) return <>{children}</>;
 
   const navItems = [
-    { to: '/', icon: 'fa-house', label: 'Dashboard' },
+    { to: '/dashboard', icon: 'fa-house', label: 'Dashboard' },
     { to: '/patients', icon: 'fa-users', label: 'Patients' },
     { to: '/transmissions', icon: 'fa-comments-dollar', label: 'Transmissions', badge: unreadTrans },
     { to: '/planning', icon: 'fa-calendar-days', label: 'Planning' },
@@ -43,7 +43,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </div>
         <span className="text-xl font-black tracking-tighter text-slate-900">NurseBot</span>
       </div>
-      
+
       <nav className="flex-1 px-4 space-y-1 py-4 overflow-y-auto scrollbar-hide">
         {filteredNav.map((item) => (
           <NavLink
@@ -51,8 +51,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             to={item.to}
             onClick={() => setIsMobileMenuOpen(false)}
             className={({ isActive }) =>
-              `flex items-center justify-between px-5 py-3 rounded-xl transition-all group ${
-                isActive ? 'bg-slate-900 text-white shadow-lg' : 'hover:bg-slate-50 text-slate-500 font-semibold'
+              `flex items-center justify-between px-5 py-3 rounded-xl transition-all group ${isActive ? 'bg-slate-900 text-white shadow-lg' : 'hover:bg-slate-50 text-slate-500 font-semibold'
               }`
             }
           >
@@ -85,11 +84,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </div>
           </div>
           <button onClick={handleLogout} className="text-slate-300 hover:text-rose-500 transition-colors">
-             <i className="fa-solid fa-power-off text-sm"></i>
+            <i className="fa-solid fa-power-off text-sm"></i>
           </button>
         </div>
         <div className="px-2 text-[8px] font-black text-slate-300 uppercase tracking-widest text-center">
-           Build: {process.env.VITE_BUILD_DATE}
+          Build: {process.env.VITE_BUILD_DATE}
         </div>
       </div>
     </>
@@ -124,17 +123,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 {dbStatus === 'connected' ? 'Cloud Synchronisé' : dbStatus === 'loading' ? 'Connexion...' : 'Mode Hors-ligne'}
               </span>
-              
+
               {/* Tooltip detail */}
               <div className="absolute top-full left-0 mt-2 w-64 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
-                 <p className="text-[10px] font-black uppercase text-emerald-500 mb-1">Diagnostic Temps Réel</p>
-                 <p className="text-[11px] font-medium leading-relaxed">
-                   {dbStatus === 'connected' 
-                     ? "Base Supabase connectée. Vos données sont persistées sur le serveur Cloud en temps réel." 
-                     : dbStatus === 'error' 
-                       ? `Erreur : ${dbError || "Impossible de joindre le serveur SQL."}`
-                       : "Données stockées uniquement sur cet appareil."}
-                 </p>
+                <p className="text-[10px] font-black uppercase text-emerald-500 mb-1">Diagnostic Temps Réel</p>
+                <p className="text-[11px] font-medium leading-relaxed">
+                  {dbStatus === 'connected'
+                    ? "Base Supabase connectée. Vos données sont persistées sur le serveur Cloud en temps réel."
+                    : dbStatus === 'error'
+                      ? `Erreur : ${dbError || "Impossible de joindre le serveur SQL."}`
+                      : "Données stockées uniquement sur cet appareil."}
+                </p>
               </div>
             </div>
           </div>
@@ -150,8 +149,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </button>
             <div className="hidden sm:block h-8 w-[1px] bg-slate-100"></div>
             <div className="hidden sm:flex flex-col items-end">
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date().toLocaleDateString('fr-FR', { weekday: 'long' })}</p>
-               <p className="text-sm font-black text-slate-900">{new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long' })}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date().toLocaleDateString('fr-FR', { weekday: 'long' })}</p>
+              <p className="text-sm font-black text-slate-900">{new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long' })}</p>
             </div>
           </div>
         </header>
