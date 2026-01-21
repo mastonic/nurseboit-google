@@ -12,7 +12,8 @@ const PrescriptionView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'expiring' | 'expired'>('all');
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     return subscribeToStore(() => setStore(getStore()));
@@ -81,15 +82,26 @@ const PrescriptionView: React.FC = () => {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestion Ordonnances</h1>
           <p className="text-slate-500 font-medium mt-1">Extraction IA & Suivi de validité</p>
         </div>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isScanning}
-          className="px-8 py-4 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-200 hover:scale-105 transition-all flex items-center gap-3 w-full md:w-auto justify-center"
-        >
-          {isScanning ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-camera"></i>}
-          Scanner Ordonnance
-        </button>
-        <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <button
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={isScanning}
+            className="px-6 py-4 bg-indigo-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 transition-all flex items-center gap-2 justify-center"
+          >
+            {isScanning ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-camera"></i>}
+            Appareil Photo
+          </button>
+          <button
+            onClick={() => galleryInputRef.current?.click()}
+            disabled={isScanning}
+            className="px-6 py-4 bg-emerald-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-100 hover:scale-105 transition-all flex items-center gap-2 justify-center"
+          >
+            {isScanning ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-image"></i>}
+            Ma Galerie
+          </button>
+        </div>
+        <input type="file" ref={galleryInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
+        <input type="file" ref={cameraInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" capture="environment" />
       </div>
 
       <div className="flex flex-col md:flex-row gap-4">
