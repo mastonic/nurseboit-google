@@ -46,9 +46,6 @@ const LandingPage: React.FC = () => {
                         >
                             Démarrer gratuitement
                         </button>
-                        <button className="px-10 py-5 bg-white text-slate-900 border border-slate-200 rounded-[1.5rem] font-black uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-all text-sm w-full sm:w-auto">
-                            Voir la démo
-                        </button>
                     </div>
                 </div>
             </section>
