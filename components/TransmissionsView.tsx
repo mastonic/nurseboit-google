@@ -55,9 +55,10 @@ const TransmissionsView: React.FC = () => {
         {transmissions.length > 0 ? transmissions.map(t => {
           const patient = store.patients.find((p: Patient) => p.id === t.patientId);
           const isClosed = t.status === 'closed';
+          const unread = !isClosed && t.fromId !== session?.userId;
           return (
-            <div key={t.id} className={`bg-white p-8 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row gap-8 transition-all hover:shadow-xl ${!isClosed && t.fromId !== session?.userId ? 'border-l-8 border-l-emerald-500' : 'border-slate-100 opacity-80'}`}>
-              <div className="flex flex-col items-center justify-center bg-slate-50 rounded-[2rem] p-6 w-full md:w-48 shrink-0 text-center">
+            <div key={t.id} className={`bg-white p-8 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row gap-8 transition-all hover:shadow-xl ${unread ? 'border-l-8 border-l-blue-500 bg-blue-50/20' : 'border-slate-100 opacity-80'}`}>
+              <div className={`flex flex-col items-center justify-center ${unread ? 'bg-blue-50' : 'bg-slate-50'} rounded-[2rem] p-6 w-full md:w-48 shrink-0 text-center`}>
                 <div className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center text-xl font-black mb-3">
                   {patient?.lastName[0] || '?'}
                 </div>
@@ -82,22 +83,20 @@ const TransmissionsView: React.FC = () => {
                     </div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">De {t.fromName}</p>
                   </div>
-                  {!isClosed && t.fromId !== session?.userId ? (
+                  {unread ? (
                     <button
                       onClick={() => handleAcknowledge(t.id)}
-                      className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-2xl shadow-indigo-200 hover:scale-110 active:scale-95 transition-all flex items-center gap-3"
+                      className="px-6 py-3 bg-blue-600 text-white rounded-2xl text-[12px] font-black uppercase tracking-widest shadow-lg shadow-blue-200 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
                     >
-                      <i className="fa-solid fa-check-circle"></i>
-                      Valider la lecture
+                      <i className="fa-solid fa-thumbs-up"></i>
+                      J'ai lu
                     </button>
                   ) : (
-                    <div className="flex flex-col items-end gap-1 text-slate-400">
-                      <div className="flex items-center gap-2">
-                        <i className="fa-solid fa-check-double text-[10px] text-emerald-500"></i>
-                        <p className="text-[9px] font-black uppercase tracking-widest">Passation Validée</p>
-                      </div>
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <i className="fa-solid fa-check-double text-[10px] text-blue-500"></i>
+                      <p className="text-[9px] font-black uppercase tracking-widest">Lu</p>
                       {t.acknowledgedBy && (
-                        <p className="text-[8px] font-bold italic">Par {store.users.find((u: any) => u.id === t.acknowledgedBy)?.firstName} le {new Date(t.acknowledgedAt || '').toLocaleDateString()}</p>
+                        <span className="text-[8px] font-bold italic opacity-60 ml-1">par {store.users.find((u: any) => u.id === t.acknowledgedBy)?.firstName}</span>
                       )}
                     </div>
                   )}
