@@ -135,6 +135,33 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Table: internal_messages (Team Chat)
+CREATE TABLE IF NOT EXISTS public.internal_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    author_id UUID REFERENCES public.users(id),
+    author_name TEXT,
+    text TEXT NOT NULL,
+    type TEXT DEFAULT 'text',
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Table: messages (Patient Chat)
+CREATE TABLE IF NOT EXISTS public.messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+    direction TEXT CHECK (direction IN ('inbound', 'outbound')),
+    text TEXT NOT NULL,
+    status TEXT DEFAULT 'sent',
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Table: settings (Cabinet Config)
+CREATE TABLE IF NOT EXISTS public.settings (
+    id TEXT PRIMARY KEY DEFAULT 'cabinet_main',
+    data JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- Row Level Security (RLS) Configuration (Simplified for now)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
@@ -144,13 +171,20 @@ ALTER TABLE public.ordonnances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pre_invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.internal_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
--- Policies (Allow all for rapid prototyping/testing)
-CREATE POLICY "Enable all for authenticated users" ON public.users FOR ALL TO authenticated USING (true);
-CREATE POLICY "Enable all for authenticated users" ON public.patients FOR ALL TO authenticated USING (true);
-CREATE POLICY "Enable all for authenticated users" ON public.appointments FOR ALL TO authenticated USING (true);
-CREATE POLICY "Enable all for authenticated users" ON public.transmissions FOR ALL TO authenticated USING (true);
-CREATE POLICY "Enable all for authenticated users" ON public.ordonnances FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Enable all for authenticated users" ON public.pre_invoices FOR ALL TO authenticated USING (true);
-CREATE POLICY "Enable all for authenticated users" ON public.tasks FOR ALL TO authenticated USING (true);
-CREATE POLICY "Enable all for authenticated users" ON public.logs FOR ALL TO authenticated USING (true);
+-- Dynamic Policy Generator for all public tables
+-- Grants full access to authenticated users
+DO $$ 
+DECLARE 
+    t text;
+BEGIN
+    FOR t IN SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS "Enable all for authenticated users" ON public.%%I', t);
+        EXECUTE format('DROP POLICY IF EXISTS "authenticated_full_access" ON public.%%I', t);
+        EXECUTE format('CREATE POLICY "authenticated_full_access" ON public.%%I FOR ALL TO authenticated USING (true) WITH CHECK (true)', t);
+    END LOOP;
+END $$;

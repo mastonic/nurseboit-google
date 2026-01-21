@@ -145,7 +145,33 @@ CREATE TABLE public.messages (
     status TEXT DEFAULT 'sent'
 );
 
--- 10. SETUP ROW LEVEL SECURITY (RLS) - PUBLIC ACCESS FOR NOW
+-- 10. CREATE TABLE INTERNAL_MESSAGES
+CREATE TABLE public.internal_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    author_id UUID REFERENCES public.users(id),
+    author_name TEXT,
+    text TEXT NOT NULL,
+    type TEXT DEFAULT 'text',
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 11. CREATE TABLE LOGS
+CREATE TABLE public.logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    action TEXT NOT NULL,
+    user_name TEXT,
+    user_id UUID REFERENCES public.users(id),
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 12. CREATE TABLE SETTINGS
+CREATE TABLE public.settings (
+    id TEXT PRIMARY KEY DEFAULT 'cabinet_main',
+    data JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 13. SETUP ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
@@ -154,16 +180,21 @@ ALTER TABLE public.ordonnances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pre_invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.internal_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
 -- Allow authenticated access
-CREATE POLICY "Auth Access Users" ON public.users FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Auth Access Patients" ON public.patients FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Auth Access Appointments" ON public.appointments FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Auth Access Transmissions" ON public.transmissions FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Auth Access Ordonnances" ON public.ordonnances FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Auth Access Tasks" ON public.tasks FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Auth Access PreInvoices" ON public.pre_invoices FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Auth Access Messages" ON public.messages FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DO $$ 
+DECLARE 
+    t text;
+BEGIN
+    FOR t IN SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS "Auth Access %s" ON public.%%I', t, t);
+        EXECUTE format('CREATE POLICY "authenticated_full_access" ON public.%%I FOR ALL TO authenticated USING (true) WITH CHECK (true)', t, t);
+    END LOOP;
+END $$;
 
 -- 11. INSERT DEFAULT USERS
 INSERT INTO public.users (id, first_name, last_name, role, pin, active, phone)

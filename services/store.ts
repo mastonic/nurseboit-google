@@ -193,12 +193,16 @@ export const initStore = async () => {
   }
   try {
     state.dbStatus = 'loading';
-    const [uRes, pRes, aRes, tRes, oRes] = await Promise.all([
+    const [uRes, pRes, aRes, tRes, oRes, taskRes, msgRes, intMsgRes, settingsRes] = await Promise.all([
       supabase.from('users').select('*'),
       supabase.from('patients').select('*'),
       supabase.from('appointments').select('*'),
       supabase.from('transmissions').select('*').order('timestamp', { ascending: false }),
-      supabase.from('ordonnances').select('*')
+      supabase.from('ordonnances').select('*'),
+      supabase.from('tasks').select('*'),
+      supabase.from('messages').select('*'),
+      supabase.from('internal_messages').select('*'),
+      supabase.from('settings').select('*').eq('id', 'cabinet_main').single()
     ]);
 
     if (uRes.error) throw uRes.error;
@@ -206,12 +210,20 @@ export const initStore = async () => {
     if (aRes.error) throw aRes.error;
     if (tRes.error) throw tRes.error;
     if (oRes.error) throw oRes.error;
+    if (taskRes.error) throw taskRes.error;
+    if (msgRes.error) throw msgRes.error;
+    if (intMsgRes.error) throw intMsgRes.error;
 
     const users = toCamel(uRes.data || []);
     const patients = toCamel(pRes.data || []);
     const appointments = toCamel(aRes.data || []);
     const transmissions = toCamel(tRes.data || []);
     const ordonnances = toCamel(oRes.data || []);
+    const tasks = toCamel(taskRes.data || []);
+    const messages = toCamel(msgRes.data || []);
+    const internalMessages = toCamel(intMsgRes.data || []);
+    const settings = settingsRes.data ? toCamel(settingsRes.data.data) : state.settings;
+
     const lRes = await supabase.from('logs').select('*').order('timestamp', { ascending: false }).limit(100);
     const logs = toCamel(lRes.data || []);
 
@@ -231,6 +243,10 @@ export const initStore = async () => {
       appointments: mergeById(state.appointments, appointments),
       transmissions: mergeById(state.transmissions, transmissions),
       prescriptions: mergeById(state.prescriptions, ordonnances),
+      tasks: mergeById(state.tasks, tasks),
+      messages: mergeById(state.messages, messages),
+      internalMessages: mergeById(state.internalMessages, internalMessages),
+      settings: settings || state.settings,
       logs: logs.length ? logs : state.logs
     };
     saveOffline();
@@ -270,8 +286,12 @@ export const subscribeToStore = (callback: () => void) => {
   return () => window.removeEventListener(UPDATE_EVENT, callback);
 };
 
-export const updateSettings = (settingsUpdate: Partial<Settings>) => {
+export const updateSettings = async (settingsUpdate: Partial<Settings>) => {
   state.settings = { ...state.settings, ...settingsUpdate, apiConfig: { ...state.settings.apiConfig, ...(settingsUpdate.apiConfig || {}) } };
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('settings').upsert({ id: 'cabinet_main', data: toSnake(state.settings) });
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
@@ -378,9 +398,14 @@ export const addPatient = async (patient: Patient) => {
 
 export const deletePatient = async (patientId: string) => {
   state.patients = state.patients.filter((p: Patient) => p.id !== patientId);
+  // Also delete associated data to maintain clean DB (optional but recommended)
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.from('patients').delete().eq('id', patientId);
+    await Promise.all([
+      supabase.from('patients').delete().eq('id', patientId),
+      supabase.from('appointments').delete().eq('patient_id', patientId),
+      supabase.from('transmissions').delete().eq('patient_id', patientId)
+    ]);
   }
   saveOffline();
   addLog(`Suppression d'un dossier patient`);
@@ -398,8 +423,17 @@ export const addTransmission = async (trans: Transmission) => {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const saveStore = (newState: Partial<any>) => {
+export const saveStore = async (newState: Partial<any>) => {
   state = { ...state, ...newState };
+  const supabase = getSupabaseClient();
+  if (supabase && newState.messages) {
+    // If messages were updated (usually in MessagesView), sync the new ones
+    // This is a simple implementation, for production use a dedicated addMessage function
+    const newMsg = newState.messages[0];
+    if (newMsg && !newMsg.id.startsWith('demo')) {
+      await supabase.from('messages').upsert(toSnake(newMsg));
+    }
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
@@ -428,8 +462,12 @@ export const markTransmissionReceived = async (transId: string, userId: string) 
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
 
-export const addInternalMessage = (msg: any) => {
+export const addInternalMessage = async (msg: any) => {
   state.internalMessages = [...(state.internalMessages || []), msg];
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.from('internal_messages').insert(toSnake(msg));
+  }
   saveOffline();
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 };
