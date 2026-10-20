@@ -1,0 +1,647 @@
+{
+  "version": "1.0-fr",
+  "lang": "fr",
+  "note": "Lexique français pour humanize.py et detect.py (--lexicon slop.fr.json). Les remplacements gardent le genre et le nombre. Modifiez-le librement.",
+  "invisible": [
+    {
+      "cp": "U+200B",
+      "name": "ZERO WIDTH SPACE",
+      "action": "delete"
+    },
+    {
+      "cp": "U+200C",
+      "name": "ZERO WIDTH NON-JOINER",
+      "action": "delete"
+    },
+    {
+      "cp": "U+200D",
+      "name": "ZERO WIDTH JOINER",
+      "action": "delete"
+    },
+    {
+      "cp": "U+2060",
+      "name": "WORD JOINER",
+      "action": "delete"
+    },
+    {
+      "cp": "U+FEFF",
+      "name": "ZERO WIDTH NO-BREAK SPACE / BOM",
+      "action": "delete"
+    },
+    {
+      "cp": "U+00AD",
+      "name": "SOFT HYPHEN",
+      "action": "delete"
+    },
+    {
+      "cp": "U+180E",
+      "name": "MONGOLIAN VOWEL SEPARATOR",
+      "action": "delete"
+    },
+    {
+      "cp": "U+061C",
+      "name": "ARABIC LETTER MARK",
+      "action": "delete"
+    },
+    {
+      "cp": "U+200E",
+      "name": "LEFT-TO-RIGHT MARK",
+      "action": "delete"
+    },
+    {
+      "cp": "U+200F",
+      "name": "RIGHT-TO-LEFT MARK",
+      "action": "delete"
+    },
+    {
+      "cp": "U+E0000-U+E007F",
+      "name": "TAG CHARACTERS (invisible ASCII smuggling)",
+      "action": "delete"
+    },
+    {
+      "cp": "U+00A0",
+      "name": "NO-BREAK SPACE",
+      "action": "space"
+    },
+    {
+      "cp": "U+202F",
+      "name": "NARROW NO-BREAK SPACE",
+      "action": "space"
+    },
+    {
+      "cp": "U+2009",
+      "name": "THIN SPACE",
+      "action": "space"
+    },
+    {
+      "cp": "U+2007",
+      "name": "FIGURE SPACE",
+      "action": "space"
+    },
+    {
+      "cp": "U+2003",
+      "name": "EM SPACE",
+      "action": "space"
+    },
+    {
+      "cp": "U+2002",
+      "name": "EN SPACE",
+      "action": "space"
+    }
+  ],
+  "typographic": [
+    {
+      "from": "—",
+      "name": "EM DASH",
+      "to": ", "
+    },
+    {
+      "from": "–",
+      "name": "EN DASH",
+      "to": "-"
+    },
+    {
+      "from": "‘",
+      "name": "LEFT SINGLE QUOTE",
+      "to": "'"
+    },
+    {
+      "from": "’",
+      "name": "RIGHT SINGLE QUOTE",
+      "to": "'"
+    },
+    {
+      "from": "“",
+      "name": "LEFT DOUBLE QUOTE",
+      "to": "\""
+    },
+    {
+      "from": "”",
+      "name": "RIGHT DOUBLE QUOTE",
+      "to": "\""
+    },
+    {
+      "from": "…",
+      "name": "HORIZONTAL ELLIPSIS",
+      "to": "..."
+    },
+    {
+      "from": "′",
+      "name": "PRIME",
+      "to": "'"
+    },
+    {
+      "from": "·",
+      "name": "MIDDLE DOT",
+      "to": "-"
+    },
+    {
+      "from": "•",
+      "name": "BULLET",
+      "to": "-"
+    },
+    {
+      "from": "→",
+      "name": "RIGHTWARDS ARROW",
+      "to": "->"
+    }
+  ],
+  "words": [
+    {
+      "find": "révolutionner",
+      "replace": "changer",
+      "family": "verbes"
+    },
+    {
+      "find": "optimiser",
+      "replace": "améliorer",
+      "family": "verbes"
+    },
+    {
+      "find": "booster",
+      "replace": "augmenter",
+      "family": "verbes"
+    },
+    {
+      "find": "sublimer",
+      "replace": "mettre en valeur",
+      "family": "verbes"
+    },
+    {
+      "find": "propulser",
+      "replace": "pousser",
+      "family": "verbes"
+    },
+    {
+      "find": "décryptons",
+      "replace": "voyons",
+      "family": "verbes"
+    },
+    {
+      "find": "plongeons dans",
+      "replace": "voyons",
+      "family": "verbes"
+    },
+    {
+      "find": "plongeons au cœur de",
+      "replace": "voyons",
+      "family": "verbes"
+    },
+    {
+      "find": "témoigne de",
+      "replace": "montre",
+      "family": "verbes"
+    },
+    {
+      "find": "témoignent de",
+      "replace": "montrent",
+      "family": "verbes"
+    },
+    {
+      "find": "met en lumière",
+      "replace": "montre",
+      "family": "verbes"
+    },
+    {
+      "find": "mettent en lumière",
+      "replace": "montrent",
+      "family": "verbes"
+    },
+    {
+      "find": "mettre en lumière",
+      "replace": "montrer",
+      "family": "verbes"
+    },
+    {
+      "find": "met en exergue",
+      "replace": "montre",
+      "family": "verbes"
+    },
+    {
+      "find": "mettre en exergue",
+      "replace": "montrer",
+      "family": "verbes"
+    },
+    {
+      "find": "crucial",
+      "replace": "important",
+      "family": "adjectifs"
+    },
+    {
+      "find": "cruciale",
+      "replace": "importante",
+      "family": "adjectifs"
+    },
+    {
+      "find": "cruciaux",
+      "replace": "importants",
+      "family": "adjectifs"
+    },
+    {
+      "find": "cruciales",
+      "replace": "importantes",
+      "family": "adjectifs"
+    },
+    {
+      "find": "incontournable",
+      "replace": "indispensable",
+      "family": "adjectifs"
+    },
+    {
+      "find": "incontournables",
+      "replace": "indispensables",
+      "family": "adjectifs"
+    },
+    {
+      "find": "véritable",
+      "replace": "",
+      "family": "adjectifs"
+    },
+    {
+      "find": "véritables",
+      "replace": "",
+      "family": "adjectifs"
+    },
+    {
+      "find": "holistique",
+      "replace": "",
+      "family": "adjectifs"
+    },
+    {
+      "find": "holistiques",
+      "replace": "",
+      "family": "adjectifs"
+    },
+    {
+      "find": "inégalé",
+      "replace": "unique",
+      "family": "adjectifs"
+    },
+    {
+      "find": "inégalée",
+      "replace": "unique",
+      "family": "adjectifs"
+    },
+    {
+      "find": "synergie",
+      "replace": "collaboration",
+      "family": "noms"
+    },
+    {
+      "find": "synergies",
+      "replace": "collaborations",
+      "family": "noms"
+    },
+    {
+      "find": "paradigme",
+      "replace": "modèle",
+      "family": "noms"
+    },
+    {
+      "find": "paradigmes",
+      "replace": "modèles",
+      "family": "noms"
+    },
+    {
+      "find": "levier",
+      "replace": "moyen",
+      "family": "noms"
+    },
+    {
+      "find": "leviers",
+      "replace": "moyens",
+      "family": "noms"
+    },
+    {
+      "find": "pierre angulaire",
+      "replace": "base",
+      "family": "noms"
+    },
+    {
+      "find": "game changer",
+      "replace": "tournant",
+      "family": "noms"
+    },
+    {
+      "find": "game-changer",
+      "replace": "tournant",
+      "family": "noms"
+    },
+    {
+      "find": "une myriade de",
+      "replace": "beaucoup de",
+      "family": "noms"
+    },
+    {
+      "find": "une pléthore de",
+      "replace": "beaucoup de",
+      "family": "noms"
+    },
+    {
+      "find": "un large éventail de",
+      "replace": "beaucoup de",
+      "family": "noms"
+    },
+    {
+      "find": "une panoplie de",
+      "replace": "plusieurs",
+      "family": "noms"
+    },
+    {
+      "find": "véritablement",
+      "replace": "vraiment",
+      "family": "adverbes"
+    },
+    {
+      "find": "indéniablement",
+      "replace": "",
+      "family": "adverbes"
+    },
+    {
+      "find": "incontestablement",
+      "replace": "",
+      "family": "adverbes"
+    },
+    {
+      "find": "fondamentalement",
+      "replace": "",
+      "family": "adverbes"
+    },
+    {
+      "find": "de surcroît",
+      "replace": "en plus",
+      "family": "adverbes"
+    },
+    {
+      "find": "en outre",
+      "replace": "en plus",
+      "family": "adverbes"
+    },
+    {
+      "find": "en somme",
+      "replace": "bref",
+      "family": "adverbes"
+    },
+    {
+      "find": "en définitive",
+      "replace": "au final",
+      "family": "adverbes"
+    },
+    {
+      "find": "plus que jamais",
+      "replace": "",
+      "family": "adverbes"
+    }
+  ],
+  "phrases": [
+    {
+      "find": "dans un monde en constante évolution",
+      "replace": "aujourd'hui",
+      "family": "ouvertures"
+    },
+    {
+      "find": "dans un monde en perpétuelle évolution",
+      "replace": "aujourd'hui",
+      "family": "ouvertures"
+    },
+    {
+      "find": "à l'ère du numérique",
+      "replace": "aujourd'hui",
+      "family": "ouvertures"
+    },
+    {
+      "find": "à l'heure du numérique",
+      "replace": "aujourd'hui",
+      "family": "ouvertures"
+    },
+    {
+      "find": "dans le paysage actuel",
+      "replace": "aujourd'hui",
+      "family": "ouvertures"
+    },
+    {
+      "find": "dans le contexte actuel",
+      "replace": "aujourd'hui",
+      "family": "ouvertures"
+    },
+    {
+      "find": "ce n'est un secret pour personne que",
+      "replace": "",
+      "family": "ouvertures"
+    },
+    {
+      "find": "ce n'est un secret pour personne,",
+      "replace": "",
+      "family": "ouvertures"
+    },
+    {
+      "find": "laissez-moi vous expliquer",
+      "replace": "",
+      "family": "ouvertures"
+    },
+    {
+      "find": "imaginez un monde où",
+      "replace": "imaginez si",
+      "family": "ouvertures"
+    },
+    {
+      "find": "au cœur de",
+      "replace": "dans",
+      "family": "ouvertures"
+    },
+    {
+      "find": "au cœur du",
+      "replace": "dans le",
+      "family": "ouvertures"
+    },
+    {
+      "find": "au cœur des",
+      "replace": "dans les",
+      "family": "ouvertures"
+    },
+    {
+      "find": "il est important de noter que",
+      "replace": "",
+      "family": "remplissage"
+    },
+    {
+      "find": "il convient de noter que",
+      "replace": "",
+      "family": "remplissage"
+    },
+    {
+      "find": "il est intéressant de noter que",
+      "replace": "",
+      "family": "remplissage"
+    },
+    {
+      "find": "force est de constater que",
+      "replace": "",
+      "family": "remplissage"
+    },
+    {
+      "find": "il est essentiel de",
+      "replace": "il faut",
+      "family": "remplissage"
+    },
+    {
+      "find": "il est crucial de",
+      "replace": "il faut",
+      "family": "remplissage"
+    },
+    {
+      "find": "il est primordial de",
+      "replace": "il faut",
+      "family": "remplissage"
+    },
+    {
+      "find": "afin de",
+      "replace": "pour",
+      "family": "remplissage"
+    },
+    {
+      "find": "en ce qui concerne",
+      "replace": "pour",
+      "family": "remplissage"
+    },
+    {
+      "find": "je suis ravi de vous annoncer que",
+      "replace": "",
+      "family": "annonces"
+    },
+    {
+      "find": "je suis ravie de vous annoncer que",
+      "replace": "",
+      "family": "annonces"
+    },
+    {
+      "find": "j'ai le plaisir de vous annoncer que",
+      "replace": "",
+      "family": "annonces"
+    },
+    {
+      "find": "je suis fier de vous annoncer que",
+      "replace": "",
+      "family": "annonces"
+    },
+    {
+      "find": "je suis fière de vous annoncer que",
+      "replace": "",
+      "family": "annonces"
+    },
+    {
+      "find": "sans plus attendre",
+      "replace": "",
+      "family": "annonces"
+    },
+    {
+      "find": "relisez cette phrase",
+      "replace": "",
+      "family": "fins"
+    },
+    {
+      "find": "à méditer",
+      "replace": "",
+      "family": "fins"
+    },
+    {
+      "find": "laissez ça infuser",
+      "replace": "",
+      "family": "fins"
+    },
+    {
+      "find": "le futur est déjà là",
+      "replace": "",
+      "family": "fins"
+    },
+    {
+      "find": "le choix vous appartient",
+      "replace": "",
+      "family": "fins"
+    },
+    {
+      "find": "enregistrez ce post pour plus tard",
+      "replace": "",
+      "family": "fins"
+    },
+    {
+      "find": "et vous, qu'en pensez-vous ?",
+      "replace": "",
+      "family": "fins"
+    }
+  ],
+  "structures": [
+    {
+      "id": "pas-juste",
+      "regex": "(?i)\\bce n['’]?est pas (?:juste|seulement|simplement|que|qu['’]une?)\\b[^.!?\\n]{2,60}[,.;]\\s*c['’]est\\b",
+      "name": "« Ce n'est pas juste X, c'est Y »",
+      "fix": "Dites la seule chose que vous pensez vraiment. Supprimez la première moitié."
+    },
+    {
+      "id": "non-seulement",
+      "regex": "(?i)\\bnon seulement\\b[^.!?\\n]{2,80}\\bmais (?:aussi|également|encore)\\b",
+      "name": "« Non seulement X mais aussi Y »",
+      "fix": "Deux phrases, ou gardez la moitié la plus forte."
+    },
+    {
+      "id": "il-sagit",
+      "regex": "(?i)\\bil ne s['’]agit pas (?:de|d['’]|seulement|que)[^.!?\\n]{2,60}[.,;]\\s*il s['’]agit\\b",
+      "name": "« Il ne s'agit pas de X. Il s'agit de Y. »",
+      "fix": "Commencez par Y. Le retournement est le tic."
+    },
+    {
+      "id": "le-resultat",
+      "regex": "(?im)^\\s*(?:le résultat|la suite|le pire|le meilleur|la vérité|la clé|le secret|la réponse)\\s*\\?\\s*$",
+      "name": "« Le résultat ? » seul sur sa ligne",
+      "fix": "Donnez le résultat directement."
+    },
+    {
+      "id": "voici-ce-que",
+      "regex": "(?i)\\bvoici ce que (?:j['’]ai|nous avons) appris\\b",
+      "name": "« Voici ce que j'ai appris »",
+      "fix": "Commencez par la leçon elle-même."
+    },
+    {
+      "id": "triade",
+      "regex": "(?i)\\b\\w+, \\w+ et \\w+\\.",
+      "name": "Triade « X, Y et Z. »",
+      "fix": "Gardez les deux éléments qui comptent, ou ajoutez-en un quatrième précis."
+    },
+    {
+      "id": "palpable",
+      "regex": "(?i)\\b(?:était|est|étaient) palpable\\b|\\bvraie révélation\\b|\\bvéritable révolution\\b",
+      "name": "Emphase de brochure (« palpable », « vraie révélation »)",
+      "fix": "Racontez ce qui s'est passé, avec un détail."
+    },
+    {
+      "id": "en-tant-qu-ia",
+      "regex": "(?i)\\ben tant qu['’](?:IA|intelligence artificielle)\\b|\\ben tant que modèle de langage\\b",
+      "name": "« En tant qu'IA »",
+      "fix": "Supprimez."
+    },
+    {
+      "id": "en-resume",
+      "regex": "(?im)^\\s*(?:en résumé|pour résumer|en conclusion|pour conclure)\\b",
+      "name": "« En résumé / En conclusion »",
+      "fix": "La dernière ligne doit se suffire à elle-même."
+    },
+    {
+      "id": "appat",
+      "regex": "(?i)(?:qu['’]en pensez-vous|vous en pensez quoi|et vous \\?|d['’]accord \\?|j['’]ai tort \\?)\\s*\\??\\s*$",
+      "name": "Question d'appât générique",
+      "fix": "Posez une question précise sur le sujet du post."
+    },
+    {
+      "id": "rocket",
+      "regex": "[\\U0001F680\\U0001F525\\U0001F4A1\\u2728\\U0001F3AF]",
+      "name": "Rocket / fire / bulb / sparkle / dart emoji",
+      "fix": "One emoji max, and not one of these five."
+    },
+    {
+      "id": "hashtag-wall",
+      "regex": "(?:#\\w+[ \\t]*){5,}",
+      "name": "Hashtag wall (5+)",
+      "fix": "Three hashtags. LinkedIn stopped rewarding the wall."
+    }
+  ]
+}

@@ -20,6 +20,14 @@ python3 detect.py draft.txt                    # score it, five checks
 python3 detect.py before.txt after.txt         # prove the delta
 ```
 
+**L'utilisateur poste en français.** Pour un texte en français, ajoute
+`--lexicon slop.fr.json` à chaque commande (humanize.py et detect.py), par
+exemple `python3 humanize.py draft.txt --lexicon slop.fr.json --report`.
+Ce lexique remplace les tournures IA françaises (« dans un monde en constante
+évolution », « met en lumière », « véritable », « Ce n'est pas juste X, c'est
+Y »...), garde l'espace avant `; : ! ?`, et compte « on », « ça », « j' » et
+les pronoms français dans le check VOICE. `slop.json` reste pour l'anglais.
+
 Both read `slop.json`, which is the lexicon: 100+ stock words and phrases with
 plain-English replacements, 17 invisible character classes, 11 typographic
 substitutions, and 11 structural tells. It is meant to be edited. If the user
@@ -89,9 +97,9 @@ behalf, and do not tell a user their text is undetectable.
 
 ## Order of operations
 
-1. `humanize.py draft.txt -o clean.txt --report`
+1. `humanize.py draft.txt -o clean.txt --report` (plus `--lexicon slop.fr.json` in French)
 2. Read the structural flags. Rewrite those lines yourself.
-3. `detect.py draft.txt clean.txt` to show the before and after.
+3. `detect.py draft.txt clean.txt` to show the before and after (same `--lexicon`).
 4. If the verdict is not PASS, fix the weakest check named in the output and
    go again. Two rounds is normal. Five means the draft was written by
    formula, and the fix is a different draft, not more passes.

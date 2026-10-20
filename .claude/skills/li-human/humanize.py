@@ -126,6 +126,14 @@ def _match_case(src, repl):
     return repl
 
 
+def _replace(m, repl):
+    """A deletion at the start of a sentence leaves the next word to capitalise."""
+    if repl:
+        return _match_case(m.group(0), repl)
+    before = m.string[:m.start()].rstrip(" \t")
+    return "\x01" if not before or before[-1] in ".!?\n" else ""
+
+
 def pass_lexical(text, lex):
     """Replace slop words and phrases. Longest first so phrases win."""
     hits = []
@@ -140,11 +148,15 @@ def pass_lexical(text, lex):
             continue
         hits.append({"find": find, "replace": entry["replace"] or "(deleted)",
                      "count": len(found), "family": entry["family"]})
-        text = pattern.sub(lambda m: _match_case(m.group(0), entry["replace"]), text)
+        text = pattern.sub(lambda m: _replace(m, entry["replace"]), text)
     # Clean up after deletions.
+    text = re.sub(r"\x01[ \t]*,?[ \t]*(\w)", lambda m: m.group(1).upper(), text)
+    text = text.replace("\x01", "")
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"(?m)^[ \t]*([,.;:])\s*", "", text)
-    text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+    # French puts a space before ; : ! ? - only pull commas and full stops back.
+    tight = "[,.]" if lex.get("lang") == "fr" else "[,.;:!?]"
+    text = re.sub(r"\s+(" + tight + ")", r"\1", text)
     text = re.sub(r"(?m)^[ \t]+$", "", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     # An em dash that became a comma, followed by a sentence connective, leaves

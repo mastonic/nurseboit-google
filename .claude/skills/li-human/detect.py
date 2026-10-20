@@ -33,11 +33,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LEX = os.path.join(HERE, "slop.json")
 
 SENT_RE = re.compile(r"[^.!?\n]+[.!?]*")
-WORD_RE = re.compile(r"[A-Za-z']+")
+WORD_RE = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*")
 CONTRACTIONS = re.compile(r"\b\w+'(?:s|t|re|ve|ll|d|m)\b", re.IGNORECASE)
+# French has no contractions; the casual markers are "ça", "on", "j'", "c'est".
+FR_CASUAL = re.compile(r"\b(?:ça\b|on\b|j['’]|c['’]est\b|t['’])", re.IGNORECASE)
 PRONOUNS = re.compile(r"\b(i|me|my|mine|we|us|our|you|your)\b", re.IGNORECASE)
+FR_PRONOUNS = re.compile(r"\b(?:je|j(?=['’])|moi|mon|ma|mes|nous|notre|nos|vous|votre|vos|tu|toi|ton|ta|tes|on)\b", re.IGNORECASE)
 NUMBERS = re.compile(r"\b\d[\d,.]*%?\b|\$\d")
-PROPER = re.compile(r"(?<![.!?]\s)(?<!^)\b[A-Z][a-z]{2,}\b", re.MULTILINE)
+PROPER = re.compile(r"(?<![.!?]\s)(?<!^)\b[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ]{2,}\b", re.MULTILINE)
 
 
 def clamp(n):
@@ -124,8 +127,9 @@ def check_voice(text, lex):
     if len(w) < 25:
         return 50.0, "too short to judge"
     per100 = 100 / len(w)
-    contractions = len(CONTRACTIONS.findall(text)) * per100
-    person = len(PRONOUNS.findall(text)) * per100
+    fr = lex.get("lang") == "fr"
+    contractions = len((FR_CASUAL if fr else CONTRACTIONS).findall(text)) * per100
+    person = len((FR_PRONOUNS if fr else PRONOUNS).findall(text)) * per100
     tells = 0
     names = []
     for s in lex["structures"]:
@@ -144,7 +148,7 @@ def check_voice(text, lex):
     if uniform:
         score -= 12
         names.append("uniform-bullets")
-    detail = (f"{contractions:.1f} contractions, {person:.1f} personal pronouns "
+    detail = (f"{contractions:.1f} {'casual markers' if fr else 'contractions'}, {person:.1f} personal pronouns "
               f"per 100 words, {tells} structural tell(s)")
     if names:
         detail += " [" + ", ".join(names[:4]) + "]"
